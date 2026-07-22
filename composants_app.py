@@ -38,7 +38,6 @@ def calculer_dates_cascade(
     plannings, techniciens, absences, date_reference_debut
 ):
   """Moteur d'ordonnancement en cascade (Forward Scheduling) tenant compte des absences."""
-  # Dictionnaire des absences par technicien : {nom_tech: [set de dates d'absence au format YYYY-MM-DD]}
   abs_par_tech = {}
   for abs_rec in absences:
     tech = abs_rec.get("technicien")
@@ -54,7 +53,6 @@ def calculer_dates_cascade(
     except:
       pass
 
-  # Regrouper les OFs par technicien assigné
   ofs_par_tech = {}
   ofs_non_assignes = []
 
@@ -67,27 +65,21 @@ def calculer_dates_cascade(
     else:
       ofs_non_assignes.append(p)
 
-  # Fonction utilitaire pour ajouter des jours ouvrés (excluant week-ends et absences du tech)
   def ajouter_jours_ouvres(date_depart, nb_heures_necessaires, tech_nom):
     curr_date = date_depart
     heures_restantes = nb_heures_necessaires
     technicien_absences = abs_par_tech.get(tech_nom, set())
 
-    # Sécurité anti-boucle infinie
     securite = 0
     while heures_restantes > 0 and securite < 365:
-      # S'assurer qu'on est un jour ouvré (Lundi=0 ... Vendredi=4)
       while curr_date.weekday() >= 5 or curr_date.strftime(
           "%Y-%m-%d"
       ) in technicien_absences:
         curr_date += timedelta(days=1)
 
-      # Capacité disponible ce jour-là pour ce tech
       capacite_jour = HEURES_JOUR_DEFAUT
 
       if heures_restantes <= capacite_jour:
-        # L'OF se termine ce jour-là
-        fin_date = curr_date
         break
       else:
         heures_restantes -= capacite_jour
@@ -96,12 +88,10 @@ def calculer_dates_cascade(
 
     return curr_date
 
-  # Ordonnancement par technicien
   planning_ordonnance = []
   priorite_poids = {"Urgente": 0, "Haute": 1, "Normale": 2}
 
   for tech, ofs in ofs_par_tech.items():
-    # Trier les OFs par priorité puis par date de lancement souhaitée
     ofs_tries = sorted(
         ofs,
         key=lambda x: (
@@ -113,13 +103,11 @@ def calculer_dates_cascade(
     date_dispo_courante = date_reference_debut
 
     for p in ofs_tries:
-      # Date de début au plus tôt entre la demande initiale et la dispo du technicien
       d_souhaitee = datetime.strptime(
           p.get("date_lancement", str(date_reference_debut)), "%Y-%m-%d"
       ).date()
       d_debut_reel = max(d_souhaitee, date_dispo_courante)
 
-      # S'assurer que le jour de début n'est pas un week-end ou une absence
       technicien_absences = abs_par_tech.get(tech, set())
       while d_debut_reel.weekday() >= 5 or d_debut_reel.strftime(
           "%Y-%m-%d"
@@ -127,23 +115,19 @@ def calculer_dates_cascade(
         d_debut_reel += timedelta(days=1)
 
       temps_tot = p.get("temps_total_estime_h", 0.0)
-
-      # Calcul de la date de fin estimée en cascade
       d_fin_reel = ajouter_jours_ouvres(d_debut_reel, temps_tot, tech)
 
-      # Mettre à jour l'OF avec ses nouvelles dates calculées
       p_maj = p.copy()
       p_maj["date_debut_cascade"] = str(d_debut_reel)
       p_maj["date_fin_cascade"] = str(d_fin_reel)
       planning_ordonnance.append(p_maj)
 
-      # La prochaine tâche pour ce technicien commence le jour suivant la fin de celle-ci
       date_dispo_courante = d_fin_reel + timedelta(days=1)
 
-  # Ajouter les non assignés sans cascade
   for p in ofs_non_assignes:
     p_maj = p.copy()
     p_maj["date_debut_cascade"] = p.get("date_lancement")
+    # Pour un non assigné, on estime un jour unique de fin
     p_maj["date_fin_cascade"] = p.get("date_lancement")
     planning_ordonnance.append(p_maj)
 
@@ -180,7 +164,7 @@ techniciens_cons = data.get("techniciens_cons", [])
 absences_prod = data.get("absences_prod", [])
 absences_cons = data.get("absences_cons", [])
 
-# Calcul automatique de la cascade pour la vue globale
+# Calcul automatique de la cascade
 ofs_se_cascade = calculer_dates_cascade(
     plannings_se, techniciens_prod, absences_prod, debut_semaine
 )
@@ -188,41 +172,10 @@ ofs_cons_cascade = calculer_dates_cascade(
     plannings_cons, techniciens_cons, absences_cons, debut_semaine
 )
 
-# 1. Analyse OF Sous-ensembles (basée sur la cascade)
-ofs_se_semaine = [
-    p
-    for p in ofs_se_cascade
-    if p.get("statut") not in ["Terminé", "Supprimé"]
-    and debut_semaine
-    <= datetime.strptime(
-        p.get("date_debut_cascade", str(debut_semaine)), "%Y-%m-%d"
-    ).date()
-    <= fin_semaine
-]
-nb_se_a_realiser = len(plannings_se)
-nb_se_termines = sum(
-    1 for p in plannings_se if p.get("statut") == "Terminé"
-)
 charge_restante_se_h = sum(
     p.get("temps_total_estime_h", 0)
     for p in plannings_se
     if p.get("statut") not in ["Terminé", "Supprimé"]
-)
-
-# 2. Analyse Consommables
-ofs_cons_semaine = [
-    p
-    for p in ofs_cons_cascade
-    if p.get("statut") not in ["Terminé", "Supprimé"]
-    and debut_semaine
-    <= datetime.strptime(
-        p.get("date_debut_cascade", str(debut_semaine)), "%Y-%m-%d"
-    ).date()
-    <= fin_semaine
-]
-nb_cons_a_realiser = len(plannings_cons)
-nb_cons_termines = sum(
-    1 for p in plannings_cons if p.get("statut") == "Terminé"
 )
 charge_restante_cons_h = sum(
     p.get("temps_total_estime_h", 0)
@@ -236,7 +189,7 @@ capacite_dispo_cons_h = len(techniciens_cons) * CAPACITE_HEBDO
 
 # --- ONGLET 1 : TABLEAU DE BORD ---
 with onglets[0]:
-  st.header("📊 Tableau de Bord & Charge Globale")
+  st.header("📊 Tableau de Bord & Suivi des OFs")
   st.markdown(
       f"**Semaine en cours :** du {debut_semaine.strftime('%d/%m/%Y')} au"
       f" {fin_semaine.strftime('%d/%m/%Y')}"
@@ -246,9 +199,6 @@ with onglets[0]:
   with c1:
     st.subheader("🛠️ Production Sous-ensembles")
     st.metric("Charge totale restante", f"{charge_restante_se_h:.1f} h")
-    st.metric(
-        "Capacité théorique hebdo", f"{capacite_dispo_prod_h:.1f} h brut"
-    )
     if charge_restante_se_h > capacite_dispo_prod_h:
       st.error("🚨 Surcharge détectée en Production SE")
     else:
@@ -257,34 +207,59 @@ with onglets[0]:
   with c2:
     st.subheader("📦 Fabrication Consommables")
     st.metric("Charge totale restante", f"{charge_restante_cons_h:.1f} h")
-    st.metric(
-        "Capacité théorique hebdo", f"{capacite_dispo_cons_h:.1f} h brut"
-    )
     if charge_restante_cons_h > capacite_dispo_cons_h:
       st.error("🚨 Surcharge détectée en Consommables")
     else:
       st.success("✅ Capacité Consommables OK")
 
+  st.markdown("---")
+
+  # Tableaux de suivi centralisés sur l'écran 1 avec dates de début/fin cascade
+  st.subheader("🛠️ Suivi détaillé des OFs Sous-ensembles (avec Cascade)")
+  if ofs_se_cascade:
+    df_dashboard_se = pd.DataFrame(ofs_se_cascade)
+    st.dataframe(df_dashboard_se, use_container_width=True)
+    st.download_button(
+        label="📥 Exporter le suivi OFs SE (CSV)",
+        data=convertir_df_en_csv(df_dashboard_se),
+        file_name="suivi_ofs_se.csv",
+        mime="text/csv",
+        key="exp_dash_se",
+    )
+  else:
+    st.info("Aucun OF Sous-ensemble enregistré.")
+
+  st.markdown("---")
+
+  st.subheader("📦 Suivi détaillé des OFs Consommables (avec Cascade)")
+  if ofs_cons_cascade:
+    df_dashboard_cons = pd.DataFrame(ofs_cons_cascade)
+    st.dataframe(df_dashboard_cons, use_container_width=True)
+    st.download_button(
+        label="📥 Exporter le suivi OFs Consommables (CSV)",
+        data=convertir_df_en_csv(df_dashboard_cons),
+        file_name="suivi_ofs_consommables.csv",
+        mime="text/csv",
+        key="exp_dash_cons",
+    )
+  else:
+    st.info("Aucun OF Consommable enregistré.")
+
 
 # --- ONGLET 4 : PLANIFICATION & CASCADE ---
 with onglets[3]:
-  st.header("📅 Ordonnancement en Cascade & Simulation")
-  st.markdown(
-      "L'ordonnancement place automatiquement les OFs les uns à la suite des"
-      " autres par technicien, en sautant les week-ends et les jours d'absence"
-      " saisis."
-  )
+  st.header("📅 Ordonnancement en Cascade & Vues Gantt Semaine")
 
-  sub_tab1, sub_tab2, sub_tab_cascade = st.tabs([
-      "🛠️ OFs Sous-ensembles",
-      "📦 OFs Consommables",
-      "⚡ Vue Cascade & Simulation",
+  sub_tab1, sub_tab2, sub_tab_cascade, sub_tab_gantt_couleurs = st.tabs([
+      "🛠️ Lancer un OF SE",
+      "📦 Lancer un OF Cons.",
+      "⚡ Gestion & Cascade Globale",
+      "🎨 Planning Gantt par Technicien (Couleurs)",
   ])
 
   with sub_tab1:
     liste_se = data.get("sous_ensembles", [])
     liste_tech_prod = [t["nom"] for t in techniciens_prod]
-
     if liste_se:
       with st.form("form_plan_se"):
         options_se = {
@@ -318,41 +293,12 @@ with onglets[3]:
           plannings_se.append(nouveau_p)
           data["planification_se"] = plannings_se
           sauvegarder_donnees(data)
-          st.success(
-              "OF planifié ! Le calendrier en cascade a été recalculé."
-          )
-          st.rerun()
-
-    if plannings_se:
-      st.subheader("Gestion des OFs SE existants")
-      df_se_brut = pd.DataFrame(plannings_se)
-      st.dataframe(df_se_brut, use_container_width=True)
-
-      id_sup_se = st.selectbox(
-          "ID OF à supprimer/terminer",
-          [p["id_plan"] for p in plannings_se],
-          key="del_se",
-      )
-      c_a, c_b = st.columns(2)
-      with c_a:
-        if st.button("Marquer comme Terminé SE"):
-          for p in plannings_se:
-            if p["id_plan"] == id_sup_se:
-              p["statut"] = "Terminé"
-          sauvegarder_donnees(data)
-          st.rerun()
-      with c_b:
-        if st.button("Supprimer OF SE"):
-          data["planification_se"] = [
-              p for p in plannings_se if p["id_plan"] != id_sup_se
-          ]
-          sauvegarder_donnees(data)
+          st.success("OF planifié avec succès.")
           st.rerun()
 
   with sub_tab2:
     liste_cons = data.get("consommables", [])
     liste_tech_cons = [t["nom"] for t in techniciens_cons]
-
     if liste_cons:
       with st.form("form_plan_cons"):
         options_c = {
@@ -394,25 +340,42 @@ with onglets[3]:
           st.success("Planification consommable enregistrée.")
           st.rerun()
 
-    if plannings_cons:
-      st.subheader("Gestion des OFs Consommables existants")
-      df_co_brut = pd.DataFrame(plannings_cons)
-      st.dataframe(df_co_brut, use_container_width=True)
+  with sub_tab_cascade:
+    st.subheader("⚡ Gestion & Actions sur les OFs")
+    col_act1, col_act2 = st.columns(2)
+    with col_act1:
+      if plannings_se:
+        id_sup_se = st.selectbox(
+            "ID OF SE à modifier/terminer",
+            [p["id_plan"] for p in plannings_se],
+            key="del_se",
+        )
+        if st.button("Marquer comme Terminé SE"):
+          for p in plannings_se:
+            if p["id_plan"] == id_sup_se:
+              p["statut"] = "Terminé"
+          sauvegarder_donnees(data)
+          st.rerun()
+        if st.button("Supprimer OF SE"):
+          data["planification_se"] = [
+              p for p in plannings_se if p["id_plan"] != id_sup_se
+          ]
+          sauvegarder_donnees(data)
+          st.rerun()
 
-      id_sup_co = st.selectbox(
-          "ID OF Cons. à supprimer/terminer",
-          [p["id_plan"] for p in plannings_cons],
-          key="del_co",
-      )
-      cc_a, cc_b = st.columns(2)
-      with cc_a:
+    with col_act2:
+      if plannings_cons:
+        id_sup_co = st.selectbox(
+            "ID OF Cons. à modifier/terminer",
+            [p["id_plan"] for p in plannings_cons],
+            key="del_co",
+        )
         if st.button("Marquer comme Terminé Cons."):
           for p in plannings_cons:
             if p["id_plan"] == id_sup_co:
               p["statut"] = "Terminé"
           sauvegarder_donnees(data)
           st.rerun()
-      with cc_b:
         if st.button("Supprimer OF Cons."):
           data["planification_cons"] = [
               p for p in plannings_cons if p["id_plan"] != id_sup_co
@@ -420,43 +383,91 @@ with onglets[3]:
           sauvegarder_donnees(data)
           st.rerun()
 
-  with sub_tab_cascade:
-    st.subheader(
-        "⚡ Planning Ordonnancé en Cascade (Affectations & Enchaînements réels)"
+  with sub_tab_gantt_couleurs:
+    st.subheader("🎨 Planning Semaine par Technicien & Code Couleur")
+    st.markdown(
+        "Visualisez l'affectation de chaque technicien pour la semaine en"
+        " cours. Une couleur unique est attribuée par technicien."
     )
-    if st.button(
-        "🔄 Recalculer la cascade (Actualisation congés / modifications)"
-    ):
-      st.rerun()
 
-    st.markdown("### 🛠️ Production - Sous-ensembles (Cascade)")
-    if ofs_se_cascade:
-      df_cas_se = pd.DataFrame(ofs_se_cascade)
-      st.dataframe(df_cas_se, use_container_width=True)
-      st.download_button(
-          label="📥 Exporter la cascade SE (CSV)",
-          data=convertir_df_en_csv(df_cas_se),
-          file_name="cascade_sous_ensembles.csv",
-          mime="text/csv",
-      )
-    else:
-      st.info("Aucun sous-ensemble à ordonnancer.")
+    tous_techs = [t["nom"] for t in techniciens_prod + techniciens_cons]
+    # Palette de couleurs distinctes par technicien
+    palette_couleurs = [
+        "🔵",
+        "🟢",
+        "🟠",
+        "🟣",
+        "🔴",
+        "🟤",
+        "🟡",
+        "🔷",
+        "🟩",
+        "🟧",
+    ]
+    tech_couleur_map = {
+        tech: palette_couleurs[i % len(palette_couleurs)]
+        for i, tech in enumerate(tous_techs)
+    }
 
-    st.markdown("### 📦 Consommables (Cascade)")
-    if ofs_cons_cascade:
-      df_cas_co = pd.DataFrame(ofs_cons_cascade)
-      st.dataframe(df_cas_co, use_container_width=True)
-      st.download_button(
-          label="📥 Exporter la cascade Consommables (CSV)",
-          data=convertir_df_en_csv(df_cas_co),
-          file_name="cascade_consommables.csv",
-          mime="text/csv",
-      )
-    else:
-      st.info("Aucun consommable à ordonnancer.")
+    st.markdown("**Légende des techniciens :**")
+    légende_markdown = " | ".join([
+        f"{couleur} **{tech}**" for tech, couleur in tech_couleur_map.items()
+    ])
+    st.markdown(légende_markdown if légende_markdown else "Aucun technicien.")
+
+    jours_semaine = [debut_semaine + timedelta(days=i) for i in range(5)]
+    noms_jours = [j.strftime("%A %d/%m") for j in jours_semaine]
+
+    tous_ofs_cascade = ofs_se_cascade + ofs_cons_cascade
+
+    grille_gantt_couleur = []
+    # Ligne pour les non assignés
+    ligne_na = {"Technicien": "Non assigné ⚪"}
+    for j in jours_semaine:
+      j_str = str(j)
+      matches = [
+          f"[Non assigné] {x.get('sous_ensemble') or x.get('consommable')} (x{x['quantite']})"
+          for x in tous_ofs_cascade
+          if x.get("assigne") in [None, "Non assigné"]
+          and x.get("statut") not in ["Terminé", "Supprimé"]
+          and x.get("date_debut_cascade")
+          <= j_str
+          <= x.get("date_fin_cascade")
+      ]
+      ligne_na[j.strftime("%A %d/%m")] = " | ".join(matches) if matches else ""
+    grille_gantt_couleur.append(ligne_na)
+
+    for tech in tous_techs:
+      couleur = tech_couleur_map.get(tech, "🔵")
+      ligne_tech = {"Technicien": f"{tech} {couleur}"}
+      for j in jours_semaine:
+        j_str = str(j)
+        matches = [
+            f"{x.get('sous_ensemble') or x.get('consommable')} (x{x['quantite']}) [{x.get('statut')}]"
+            for x in tous_ofs_cascade
+            if x.get("assigne") == tech
+            and x.get("statut") not in ["Terminé", "Supprimé"]
+            and x.get("date_debut_cascade")
+            <= j_str
+            <= x.get("date_fin_cascade")
+        ]
+        ligne_tech[j.strftime("%A %d/%m")] = (
+            " | ".join(matches) if matches else ""
+        )
+      grille_gantt_couleur.append(ligne_tech)
+
+    df_gantt_couleur = pd.DataFrame(grille_gantt_couleur)
+    st.dataframe(df_gantt_couleur, use_container_width=True)
+
+    st.download_button(
+        label="📥 Exporter le Planning Gantt Couleurs (CSV)",
+        data=convertir_df_en_csv(df_gantt_couleur),
+        file_name=f"planning_gantt_couleurs_{debut_semaine}.csv",
+        mime="text/csv",
+    )
 
 
-# --- ONGLETS 2, 3, 5, 6 (Reste inchangé pour Catalogue, Équipe et Absences) ---
+# --- ONGLETS 2, 3, 5, 6 (Catalogues, Équipe, Absences) ---
 with onglets[1]:
   st.header("Catalogue des Sous-ensembles")
   if data.get("sous_ensembles"):
@@ -515,15 +526,12 @@ with onglets[5]:
               "id": f"ABS-P-{len(absences_prod)+1:03d}",
               "technicien": t_p,
               "motif": m_p,
-              "date_lancement": str(db_p),
               "date_debut": str(db_p),
               "date_fin": str(df_p),
           })
           data["absences_prod"] = absences_prod
           sauvegarder_donnees(data)
-          st.success(
-              "Absence enregistrée, la cascade s'ajustera automatiquement."
-          )
+          st.success("Absence enregistrée.")
           st.rerun()
       if absences_prod:
         st.dataframe(pd.DataFrame(absences_prod))
