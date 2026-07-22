@@ -1,4 +1,3 @@
-import io
 import json
 import os
 from datetime import datetime, timedelta
@@ -17,8 +16,10 @@ def charger_donnees():
       "consommables": [],
       "planification_se": [],
       "planification_cons": [],
-      "techniciens": [],
-      "absences": [],
+      "techniciens_prod": [],
+      "techniciens_cons": [],
+      "absences_prod": [],
+      "absences_cons": [],
   }
 
 
@@ -27,7 +28,6 @@ def sauvegarder_donnees(data):
     json.dump(data, f, ensure_ascii=False, indent=4)
 
 
-# Fonction pour exporter un DataFrame en CSV (compatible natif sans dépendance openpyxl)
 def convertir_df_en_csv(df):
   return df.to_csv(index=False, sep=";", encoding="utf-8-sig").encode("utf-8-sig")
 
@@ -42,7 +42,6 @@ data = charger_donnees()
 st.title("🧩 Planification & Pilotage - Atelier")
 st.markdown("---")
 
-# Navigation principale
 onglets = st.tabs([
     "📊 Tableau de Bord",
     "⚙️ Création Sous-ensembles",
@@ -52,17 +51,18 @@ onglets = st.tabs([
     "🌴 Congés & Absences",
 ])
 
-# --- CALCULS POUR LA SEMAINE EN COURS ---
 auj = datetime.today().date()
 debut_semaine = auj - timedelta(days=auj.weekday())
 fin_semaine = debut_semaine + timedelta(days=6)
 
 plannings_se = data.get("planification_se", [])
 plannings_cons = data.get("planification_cons", [])
-techniciens = data.get("techniciens", [])
-absences = data.get("absences", [])
+techniciens_prod = data.get("techniciens_prod", [])
+techniciens_cons = data.get("techniciens_cons", [])
+absences_prod = data.get("absences_prod", [])
+absences_cons = data.get("absences_cons", [])
 
-# 1. Analyse OF Sous-ensembles de la semaine
+# 1. Analyse OF Sous-ensembles
 ofs_se_semaine = []
 for p in plannings_se:
   try:
@@ -86,44 +86,64 @@ charge_restante_se_h = sum(
     if p.get("statut") not in ["Terminé", "Supprimé"]
 )
 
-# 2. Analyse Consommables de la semaine
+# 2. Analyse Consommables
 ofs_cons_semaine = []
 for p in plannings_cons:
   try:
-    d_lanc = datetime.strptime(p["date_besoin"], "%Y-%m-%d").date()
+    d_lanc = datetime.strptime(p["date_lancement"], "%Y-%m-%d").date()
     if debut_semaine <= d_lanc <= fin_semaine:
       ofs_cons_semaine.append(p)
   except:
     pass
 
-nb_cons_a_preparer = len(ofs_cons_semaine)
-nb_cons_prepares = sum(
-    1 for p in ofs_cons_semaine if p.get("statut") == "Préparé"
+nb_cons_a_realiser = len(ofs_cons_semaine)
+nb_cons_termines = sum(
+    1 for p in ofs_cons_semaine if p.get("statut") == "Terminé"
 )
-pct_cons_prepare = (
-    int((nb_cons_prepares / nb_cons_a_preparer) * 100)
-    if nb_cons_a_preparer > 0
+pct_cons_realise = (
+    int((nb_cons_termines / nb_cons_a_realiser) * 100)
+    if nb_cons_a_realiser > 0
     else 100
 )
 
-# 3. Calcul Capacité & Disponibilité Techniciens
-capacite_hebdo_par_tech = 35.0
-capacite_totale_brute = len(techniciens) * capacite_hebdo_par_tech
+charge_restante_cons_h = sum(
+    p.get("temps_total_estime_h", 0)
+    for p in ofs_cons_semaine
+    if p.get("statut") not in ["Terminé", "Supprimé"]
+)
 
-heures_absence_semaine = 0
-for abs_rec in absences:
+# 3. Calcul Capacités & Disponibilités
+capacite_hebdo = 35.0
+
+# Tech Prod
+cap_brute_prod = len(techniciens_prod) * capacite_hebdo
+h_abs_prod = 0
+for abs_rec in absences_prod:
   try:
     d_deb = datetime.strptime(abs_rec["date_debut"], "%Y-%m-%d").date()
     d_fin = datetime.strptime(abs_rec["date_fin"], "%Y-%m-%d").date()
     deb_inter = max(debut_semaine, d_deb)
     fin_inter = min(fin_semaine, d_fin)
     if deb_inter <= fin_inter:
-      nb_jours = (fin_inter - deb_inter).days + 1
-      heures_absence_semaine += nb_jours * 7.0
+      h_abs_prod += ((fin_inter - deb_inter).days + 1) * 7.0
   except:
     pass
+capacite_dispo_prod_h = max(0.0, cap_brute_prod - h_abs_prod)
 
-capacite_disponible_h = max(0.0, capacite_totale_brute - heures_absence_semaine)
+# Tech Consommables
+cap_brute_cons = len(techniciens_cons) * capacite_hebdo
+h_abs_cons = 0
+for abs_rec in absences_cons:
+  try:
+    d_deb = datetime.strptime(abs_rec["date_debut"], "%Y-%m-%d").date()
+    d_fin = datetime.strptime(abs_rec["date_fin"], "%Y-%m-%d").date()
+    deb_inter = max(debut_semaine, d_deb)
+    fin_inter = min(fin_semaine, d_fin)
+    if deb_inter <= fin_inter:
+      h_abs_cons += ((fin_inter - deb_inter).days + 1) * 7.0
+  except:
+    pass
+capacite_dispo_cons_h = max(0.0, cap_brute_cons - h_abs_cons)
 
 
 # --- ONGLET 1 : TABLEAU DE BORD ---
@@ -141,53 +161,67 @@ with onglets[0]:
   c2.metric("Terminés", nb_se_termines)
   c3.metric("Progression SE", f"{pct_se_realise}%")
   c4.metric(
-      "Effectif dispo.",
-      f"{len(techniciens)} tech. (-{int(heures_absence_semaine)}h abs.)",
+      "Effectif Prod dispo.",
+      f"{len(techniciens_prod)} tech. (-{int(h_abs_prod)}h abs.)",
   )
 
-  # Analyse Charge vs Capacité SE
   cc1, cc2 = st.columns(2)
   cc1.metric("Charge SE restante", f"{charge_restante_se_h:.1f} heures")
-  cc2.metric("Capacité nette atelier", f"{capacite_disponible_h:.1f} heures")
+  cc2.metric("Capacité nette Prod", f"{capacite_dispo_prod_h:.1f} heures")
 
-  if charge_restante_se_h > capacite_disponible_h:
-    ecart = charge_restante_se_h - capacite_disponible_h
+  if charge_restante_se_h > capacite_dispo_prod_h:
+    ecart = charge_restante_se_h - capacite_dispo_prod_h
     st.error(
-        f"🚨 **ALERTE CHARGE SE :** La charge restante ({charge_restante_se_h:.1f}h)"
-        f" dépasse la capacité nette ({capacite_disponible_h:.1f}h) de"
-        f" **{ecart:.1f} heures**. Risque de décalage planning."
+        f"🚨 **ALERTE CHARGE SE :** La charge ({charge_restante_se_h:.1f}h)"
+        f" dépasse la capacité ({capacite_dispo_prod_h:.1f}h) de"
+        f" **{ecart:.1f} heures**."
     )
   else:
-    st.success(
-        "✅ **Capacité SE OK :** La charge de la semaine est couverte par"
-        " l'équipe."
-    )
+    st.success("✅ **Capacité SE OK**")
 
   st.markdown("---")
 
   # Indicateurs Consommables
-  st.subheader("📦 Activité Consommables & Approvisionnements/Préparations")
-  d1, d2, d3 = st.columns(3)
-  d1.metric("Consommables à préparer", nb_cons_a_preparer)
-  d2.metric("Préparés / Validés", nb_cons_prepares)
-  d3.metric("Progression Consommables", f"{pct_cons_prepare}%")
+  st.subheader("📦 Activité Fabrication de Consommables")
+  d1, d2, d3, d4 = st.columns(4)
+  d1.metric("À fabriquer", nb_cons_a_realiser)
+  d2.metric("Terminés", nb_cons_termines)
+  d3.metric("Progression Cons.", f"{pct_cons_realise}%")
+  d4.metric(
+      "Effectif Cons. dispo.",
+      f"{len(techniciens_cons)} tech. (-{int(h_abs_cons)}h abs.)",
+  )
+
+  dc1, dc2 = st.columns(2)
+  dc1.metric(
+      "Charge Consommables restante", f"{charge_restante_cons_h:.1f} heures"
+  )
+  dc2.metric("Capacité nette Cons.", f"{capacite_dispo_cons_h:.1f} heures")
+
+  if charge_restante_cons_h > capacite_dispo_cons_h:
+    ecart_c = charge_restante_cons_h - capacite_dispo_cons_h
+    st.error(
+        f"🚨 **ALERTE CHARGE CONSOMMABLES :** La charge"
+        f" ({charge_restante_cons_h:.1f}h) dépasse la capacité"
+        f" ({capacite_dispo_cons_h:.1f}h) de **{ecart_c:.1f} heures**."
+    )
+  else:
+    st.success("✅ **Capacité Consommables OK**")
 
   st.markdown("---")
   st.subheader("📋 Détails des plannings de la semaine")
 
   tab_det1, tab_det2 = st.tabs(
-      ["Ordres de Fabrication SE", "Consommables de la semaine"]
+      ["Ordres de Fabrication SE", "Fabrication Consommables"]
   )
   with tab_det1:
     if ofs_se_semaine:
       df_sh_se = pd.DataFrame(ofs_se_semaine)
       st.dataframe(df_sh_se, use_container_width=True)
-      
-      csv_data = convertir_df_en_csv(df_sh_se)
       st.download_button(
-          label="📥 Exporter les OFs de la semaine (CSV)",
-          data=csv_data,
-          file_name=f"ofs_semaine_{debut_semaine}.csv",
+          label="📥 Exporter les OFs SE (CSV)",
+          data=convertir_df_en_csv(df_sh_se),
+          file_name=f"ofs_se_semaine_{debut_semaine}.csv",
           mime="text/csv",
       )
     else:
@@ -197,16 +231,14 @@ with onglets[0]:
     if ofs_cons_semaine:
       df_sh_co = pd.DataFrame(ofs_cons_semaine)
       st.dataframe(df_sh_co, use_container_width=True)
-      
-      csv_data_co = convertir_df_en_csv(df_sh_co)
       st.download_button(
-          label="📥 Exporter les Consommables de la semaine (CSV)",
-          data=csv_data_co,
-          file_name=f"consommables_semaine_{debut_semaine}.csv",
+          label="📥 Exporter la fabrication consommables (CSV)",
+          data=convertir_df_en_csv(df_sh_co),
+          file_name=f"ofs_cons_semaine_{debut_semaine}.csv",
           mime="text/csv",
       )
     else:
-      st.info("Aucun consommable planifié/requis cette semaine.")
+      st.info("Aucun consommable planifié cette semaine.")
 
 
 # --- ONGLET 2 : CRÉATION SOUS-ENSEMBLES ---
@@ -245,7 +277,6 @@ with onglets[1]:
   if data.get("sous_ensembles"):
     df_catalogue_se = pd.DataFrame(data["sous_ensembles"])
     st.dataframe(df_catalogue_se, use_container_width=True)
-    
     st.download_button(
         label="📥 Exporter le catalogue (CSV)",
         data=convertir_df_en_csv(df_catalogue_se),
@@ -258,40 +289,44 @@ with onglets[1]:
 
 # --- ONGLET 3 : CONSOMMABLES ---
 with onglets[2]:
-  st.header("Catalogue des Consommables & Pièces d'usure")
+  st.header("Nomenclature et Fabrication des Consommables")
 
   with st.form("form_cons"):
     c1, c2 = st.columns(2)
     with c1:
       nom_c = st.text_input("Désignation du consommable")
-      ref_c = st.text_input("Référence interne / constructeur")
+      ref_c = st.text_input("Référence interne")
     with c2:
-      fourn_c = st.text_input("Fournisseur habituel")
-      delai_c = st.number_input(
-          "Délai d'approvisionnement indicatif (jours)", min_value=1, value=5
+      temps_c = st.number_input(
+          "Temps de fabrication unitaire (heures)",
+          min_value=0.1,
+          value=1.0,
+          step=0.5,
+      )
+      statut_c = st.selectbox(
+          "Statut", ["Actif", "En révision", "Obsolète"], key="statut_c"
       )
 
-    btn_c = st.form_submit_button("Enregistrer la référence")
+    btn_c = st.form_submit_button("Enregistrer la référence consommable")
     if btn_c and nom_c:
       nouveau_c = {
           "id": f"CONS-{len(data.get('consommables', [])) + 1:03d}",
           "nom": nom_c,
           "reference": ref_c,
-          "fournisseur": fourn_c,
-          "delai_appro_jours": delai_c,
+          "temps_fabrication": temps_c,
+          "statut": statut_c,
       }
       data.setdefault("consommables", []).append(nouveau_c)
       sauvegarder_donnees(data)
-      st.success(f"Référence '{nom_c}' enregistrée.")
+      st.success(f"Référence consommable '{nom_c}' enregistrée.")
       st.rerun()
 
-  st.subheader("Liste des références consommables")
+  st.subheader("Catalogue des consommables")
   if data.get("consommables"):
     df_catalogue_cons = pd.DataFrame(data["consommables"])
     st.dataframe(df_catalogue_cons, use_container_width=True)
-    
     st.download_button(
-        label="📥 Exporter les consommables (CSV)",
+        label="📥 Exporter le catalogue consommables (CSV)",
         data=convertir_df_en_csv(df_catalogue_cons),
         file_name="catalogue_consommables.csv",
         mime="text/csv",
@@ -306,11 +341,12 @@ with onglets[3]:
 
   liste_se = data.get("sous_ensembles", [])
   liste_cons = data.get("consommables", [])
-  liste_tech = [t["nom"] for t in data.get("techniciens", [])]
+  liste_tech_prod = [t["nom"] for t in techniciens_prod]
+  liste_tech_cons = [t["nom"] for t in techniciens_cons]
 
   sub_tab1, sub_tab2, sub_tab_gantt = st.tabs([
       "🛠️ Lancer un OF Sous-ensemble",
-      "📦 Planifier un Consommable",
+      "📦 Lancer un OF Consommable",
       "📈 Vue Gantt Semaine",
   ])
 
@@ -336,7 +372,9 @@ with onglets[3]:
               "Priorité", ["Normale", "Haute", "Urgente"], key="prio_se"
           )
           tech_se = st.selectbox(
-              "Assigné à", ["Non assigné"] + liste_tech, key="tech_se"
+              "Assigné à (Technicien Production)",
+              ["Non assigné"] + liste_tech_prod,
+              key="tech_se",
           )
 
         if st.form_submit_button("Planifier le sous-ensemble"):
@@ -357,62 +395,57 @@ with onglets[3]:
           plannings_se.append(nouveau_p)
           data["planification_se"] = plannings_se
           sauvegarder_donnees(data)
-          st.success("OF planifié avec succès.")
+          st.success("OF Sous-ensemble planifié avec succès.")
           st.rerun()
 
     st.subheader("Suivi & Gestion des OF Sous-ensembles")
     if plannings_se:
       df_all_se = pd.DataFrame(plannings_se)
       st.dataframe(df_all_se, use_container_width=True)
-
       st.download_button(
-          label="📥 Exporter tous les OFs (CSV)",
+          label="📥 Exporter tous les OFs SE (CSV)",
           data=convertir_df_en_csv(df_all_se),
-          file_name="tous_les_ofs_production.csv",
+          file_name="tous_les_ofs_se.csv",
           mime="text/csv",
       )
 
       id_mod_se = st.selectbox(
-          "Sélectionner un OF (par ID)", [p["id_plan"] for p in plannings_se]
+          "Sélectionner un OF SE (par ID)", [p["id_plan"] for p in plannings_se]
       )
       of_courant = next(
           (p for p in plannings_se if p["id_plan"] == id_mod_se), None
       )
 
       col_a, col_b, col_c, col_d = st.columns(4)
-
       with col_a:
-        if st.button("✅ Terminer"):
+        if st.button("✅ Terminer SE"):
           if of_courant:
             of_courant["statut"] = "Terminé"
             of_courant["cause_blocage"] = ""
             sauvegarder_donnees(data)
-            st.success(f"OF {id_mod_se} marqué comme Terminé.")
+            st.success(f"OF {id_mod_se} terminé.")
             st.rerun()
-
       with col_b:
-        cause_bloc = st.text_input("Motif du blocage", key="input_bloc_se")
-        if st.button("🔒 Bloquer"):
+        cause_bloc = st.text_input("Motif du blocage SE", key="input_bloc_se")
+        if st.button("🔒 Bloquer SE"):
           if of_courant:
             of_courant["statut"] = "Bloqué"
             of_courant["cause_blocage"] = cause_bloc
             sauvegarder_donnees(data)
             st.warning(f"OF {id_mod_se} bloqué.")
             st.rerun()
-
       with col_c:
-        cause_dec = st.text_input("Motif du décalage", key="input_dec_se")
-        if st.button("⏳ Décaler"):
+        cause_dec = st.text_input("Motif du décalage SE", key="input_dec_se")
+        if st.button("⏳ Décaler SE"):
           if of_courant:
             of_courant["statut"] = "Décalé"
             of_courant["cause_decalage"] = cause_dec
             sauvegarder_donnees(data)
             st.info(f"OF {id_mod_se} décalé.")
             st.rerun()
-
       with col_d:
         st.write("")
-        if st.button("🗑️ Supprimer OF"):
+        if st.button("🗑️ Supprimer OF SE"):
           data["planification_se"] = [
               p for p in plannings_se if p["id_plan"] != id_mod_se
           ]
@@ -425,136 +458,173 @@ with onglets[3]:
       st.warning("Veuillez enregistrer au moins un consommable.")
     else:
       with st.form("form_plan_cons"):
-        options_c = {f"{c['nom']} (Réf: {c['reference']})": c for c in liste_cons}
-        choix_c_cle = st.selectbox("Consommable concerné", list(options_c.keys()))
+        options_c = {
+            f"{c['nom']} ({c['temps_fabrication']}h unit.)": c
+            for c in liste_cons
+        }
+        choix_c_cle = st.selectbox(
+            "Consommable à fabriquer", list(options_c.keys())
+        )
 
         c1, c2 = st.columns(2)
         with c1:
-          qte_c = st.number_input("Quantité nécessaire", min_value=1, value=1)
-          date_b_c = st.date_input(
-              "Date de besoin / préparation", value=datetime.today()
+          qte_c = st.number_input("Quantité", min_value=1, value=1, key="q_c")
+          date_l_c = st.date_input(
+              "Date de lancement", value=datetime.today(), key="d_l_c"
           )
         with c2:
           prio_c = st.selectbox(
               "Priorité", ["Normale", "Haute", "Urgente"], key="prio_c"
           )
-          dest_c = st.text_input(
-              "Affectation / Machine (ex: Poste Ligne 2)", value=""
+          tech_c = st.selectbox(
+              "Assigné à (Technicien Consommables)",
+              ["Non assigné"] + liste_tech_cons,
+              key="tech_c",
           )
 
-        if st.form_submit_button("Planifier / Demander le consommable"):
+        if st.form_submit_button("Planifier la fabrication"):
           c_sel = options_c[choix_c_cle]
+          t_tot_c = c_sel["temps_fabrication"] * qte_c
           nouveau_pc = {
-              "id_plan_cons": f"PLAN-CONS-{len(plannings_cons) + 1:03d}",
+              "id_plan": f"PLAN-CONS-{len(plannings_cons) + 1:03d}",
               "consommable": c_sel["nom"],
-              "reference": c_sel["reference"],
               "quantite": qte_c,
-              "date_besoin": str(date_b_c),
+              "temps_total_estime_h": t_tot_c,
+              "date_lancement": str(date_l_c),
               "priorite": prio_c,
-              "affectation": dest_c,
-              "statut": "À préparer",
+              "assigne": tech_c,
+              "statut": "Planifié",
               "cause_blocage": "",
+              "cause_decalage": "",
           }
           plannings_cons.append(nouveau_pc)
           data["planification_cons"] = plannings_cons
           sauvegarder_donnees(data)
-          st.success("Consommable planifié.")
+          st.success("Fabrication de consommable planifiée avec succès.")
           st.rerun()
 
-    st.subheader("Suivi & Gestion des Consommables planifiés")
+    st.subheader("Suivi & Gestion des OF Consommables")
     if plannings_cons:
       df_all_co = pd.DataFrame(plannings_cons)
       st.dataframe(df_all_co, use_container_width=True)
-
       st.download_button(
-          label="📥 Exporter tous les consommables planifiés (CSV)",
+          label="📥 Exporter tous les OFs Consommables (CSV)",
           data=convertir_df_en_csv(df_all_co),
-          file_name="tous_les_consommables_planifies.csv",
+          file_name="tous_les_ofs_consommables.csv",
           mime="text/csv",
       )
 
       id_mod_c = st.selectbox(
-          "Sélectionner un consommable (par ID)",
-          [p["id_plan_cons"] for p in plannings_cons],
+          "Sélectionner un OF Consommable (par ID)",
+          [p["id_plan"] for p in plannings_cons],
       )
       cons_courant = next(
-          (p for p in plannings_cons if p["id_plan_cons"] == id_mod_c), None
+          (p for p in plannings_cons if p["id_plan"] == id_mod_c), None
       )
 
-      col_ca, col_cb, col_cc = st.columns(3)
-
+      col_ca, col_cb, col_cc, col_cd = st.columns(4)
       with col_ca:
-        if st.button("✅ Préparé / Validé"):
+        if st.button("✅ Terminer Cons."):
           if cons_courant:
-            cons_courant["statut"] = "Préparé"
+            cons_courant["statut"] = "Terminé"
             cons_courant["cause_blocage"] = ""
             sauvegarder_donnees(data)
-            st.success(f"Ligne {id_mod_c} marquée comme préparée.")
+            st.success(f"OF {id_mod_c} terminé.")
             st.rerun()
-
       with col_cb:
-        cause_bloc_c = st.text_input("Motif du blocage / rupture", key="input_bloc_c")
-        if st.button("🔒 Bloquer Consommable"):
+        cause_bloc_c = st.text_input(
+            "Motif du blocage Cons.", key="input_bloc_c"
+        )
+        if st.button("🔒 Bloquer Cons."):
           if cons_courant:
             cons_courant["statut"] = "Bloqué"
             cons_courant["cause_blocage"] = cause_bloc_c
             sauvegarder_donnees(data)
-            st.warning(f"Ligne {id_mod_c} bloquée.")
+            st.warning(f"OF {id_mod_c} bloqué.")
             st.rerun()
-
       with col_cc:
+        cause_dec_c = st.text_input(
+            "Motif du décalage Cons.", key="input_dec_c"
+        )
+        if st.button("⏳ Décaler Cons."):
+          if cons_courant:
+            cons_courant["statut"] = "Décalé"
+            cons_courant["cause_decalage"] = cause_dec_c
+            sauvegarder_donnees(data)
+            st.info(f"OF {id_mod_c} décalé.")
+            st.rerun()
+      with col_cd:
         st.write("")
-        if st.button("🗑️ Supprimer Ligne"):
+        if st.button("🗑️ Supprimer OF Cons."):
           data["planification_cons"] = [
-              p for p in plannings_cons if p["id_plan_cons"] != id_mod_c
+              p for p in plannings_cons if p["id_plan"] != id_mod_c
           ]
           sauvegarder_donnees(data)
-          st.error(f"Ligne {id_mod_c} supprimée.")
+          st.error(f"OF {id_mod_c} supprimé.")
           st.rerun()
 
   with sub_tab_gantt:
-    st.subheader("📈 Vue de type Planning Hebdomadaire (Gantt - Semaine en Cours)")
-    st.markdown(f"**Semaine du {debut_semaine.strftime('%d/%m/%Y')} au {fin_semaine.strftime('%d/%m/%Y')}**")
+    st.subheader(
+        "📈 Vue de type Planning Hebdomadaire (Gantt - Semaine en Cours)"
+    )
+    st.markdown(
+        f"**Semaine du {debut_semaine.strftime('%d/%m/%Y')} au"
+        f" {fin_semaine.strftime('%d/%m/%Y')}**"
+    )
 
     jours_semaine = [debut_semaine + timedelta(days=i) for i in range(5)]
     noms_jours = [j.strftime("%A %d/%m") for j in jours_semaine]
 
-    if plannings_se:
+    tous_ofs = plannings_se + plannings_cons
+    if tous_ofs:
       lignes_gantt = []
-      for p in plannings_se:
+      for p in tous_ofs:
         try:
           d_l = datetime.strptime(p["date_lancement"], "%Y-%m-%d").date()
           if debut_semaine <= d_l <= fin_semaine:
             jour_str = d_l.strftime("%A %d/%m")
+            nom_objet = p.get("sous_ensemble") or p.get("consommable")
             lignes_gantt.append({
                 "ID": p["id_plan"],
-                "Sous-ensemble": p["sous_ensemble"],
+                "Élément": nom_objet,
                 "Qté": p["quantite"],
                 "Technicien": p["assigne"],
                 "Statut": p["statut"],
-                "Jour": jour_str
+                "Jour": jour_str,
             })
         except:
           pass
 
       if lignes_gantt:
-        st.write("**Répartition des lancements sur la semaine :**")
-        
+        st.write(
+            "**Répartition globale des lancements (Sous-ensembles &"
+            " Consommables) :**"
+        )
+        tous_techs = ["Tous / Non assigné"] + [
+            t["nom"] for t in techniciens_prod + techniciens_cons
+        ]
+
         grille_affichage = []
-        for tech in ["Tous / Non assigné"] + [t["nom"] for t in techniciens]:
+        for tech in tous_techs:
           ligne_data = {"Technicien / Ressource": tech}
           for j_nom in noms_jours:
             if tech == "Tous / Non assigné":
-              matches = [f"{x['Sous-ensemble']} (x{x['Qté']}) [{x['Statut']}]" for x in lignes_gantt if x['Jour'] == j_nom]
+              matches = [
+                  f"{x['Élément']} (x{x['Qté']}) [{x['Statut']}]"
+                  for x in lignes_gantt
+                  if x["Jour"] == j_nom
+              ]
             else:
-              matches = [f"{x['Sous-ensemble']} (x{x['Qté']}) [{x['Statut']}]" for x in lignes_gantt if x['Jour'] == j_nom and x['Technicien'] == tech]
-            
+              matches = [
+                  f"{x['Élément']} (x{x['Qté']}) [{x['Statut']}]"
+                  for x in lignes_gantt
+                  if x["Jour"] == j_nom and x["Technicien"] == tech
+              ]
             ligne_data[j_nom] = " | ".join(matches) if matches else ""
           grille_affichage.append(ligne_data)
 
         df_grille = pd.DataFrame(grille_affichage)
         st.dataframe(df_grille, use_container_width=True)
-        
         st.download_button(
             label="📥 Exporter la vue Gantt / Semaine (CSV)",
             data=convertir_df_en_csv(df_grille),
@@ -562,123 +632,170 @@ with onglets[3]:
             mime="text/csv",
         )
       else:
-        st.info("Aucun ordre de fabrication positionné pour cette semaine dans la vue Gantt.")
+        st.info("Aucun ordre planifié pour cette semaine.")
     else:
       st.info("Aucun OF disponible.")
 
 
 # --- ONGLET 5 : ÉQUIPE ---
 with onglets[4]:
-  st.header("👥 Gestion des Techniciens")
+  st.header("👥 Gestion des Équipes")
 
-  with st.form("form_ajout_tech"):
-    c1, c2 = st.columns(2)
-    with c1:
-      nom_tech = st.text_input("Nom et Prénom du technicien")
-    with c2:
-      role_tech = st.selectbox(
-          "Rôle / Qualification",
-          [
-              "Technicien Production",
-              "Monteur Assembleur",
-              "Responsable d'Atelier",
-              "Intérimaire",
-          ],
+  col_eq1, col_eq2 = st.columns(2)
+
+  with col_eq1:
+    st.subheader("🛠️ Techniciens Production (Sous-ensembles)")
+    with st.form("form_ajout_tech_prod"):
+      nom_tp = st.text_input("Nom et Prénom (Prod)")
+      if st.form_submit_button("Ajouter technicien Prod") and nom_tp:
+        nouveau_tp = {
+            "id": f"TECH-P-{len(techniciens_prod) + 1:03d}",
+            "nom": nom_tp,
+        }
+        techniciens_prod.append(nouveau_tp)
+        data["techniciens_prod"] = techniciens_prod
+        sauvegarder_donnees(data)
+        st.success(f"Technicien Prod '{nom_tp}' ajouté.")
+        st.rerun()
+
+    if techniciens_prod:
+      df_tp = pd.DataFrame(techniciens_prod)
+      st.dataframe(df_tp, use_container_width=True)
+      suppr_tp = st.selectbox(
+          "Supprimer tech. Prod", [t["nom"] for t in techniciens_prod], key="s_tp"
       )
+      if st.button("Supprimer Prod"):
+        data["techniciens_prod"] = [
+            t for t in techniciens_prod if t["nom"] != suppr_tp
+        ]
+        sauvegarder_donnees(data)
+        st.success("Supprimé.")
+        st.rerun()
+    else:
+      st.info("Aucun technicien production.")
 
-    if st.form_submit_button("Ajouter le technicien") and nom_tech:
-      nouveau_tech = {
-          "id": f"TECH-{len(techniciens) + 1:03d}",
-          "nom": nom_tech,
-          "role": role_tech,
-      }
-      techniciens.append(nouveau_tech)
-      data["techniciens"] = techniciens
-      sauvegarder_donnees(data)
-      st.success(f"Technicien '{nom_tech}' ajouté.")
-      st.rerun()
+  with col_eq2:
+    st.subheader("📦 Techniciens Consommables")
+    with st.form("form_ajout_tech_cons"):
+      nom_tc = st.text_input("Nom et Prénom (Consommables)")
+      if st.form_submit_button("Ajouter tech. Consommables") and nom_tc:
+        nouveau_tc = {
+            "id": f"TECH-C-{len(techniciens_cons) + 1:03d}",
+            "nom": nom_tc,
+        }
+        techniciens_cons.append(nouveau_tc)
+        data["techniciens_cons"] = techniciens_cons
+        sauvegarder_donnees(data)
+        st.success(f"Technicien Cons. '{nom_tc}' ajouté.")
+        st.rerun()
 
-  st.subheader("Liste des techniciens")
-  if techniciens:
-    df_tech = pd.DataFrame(techniciens)
-    st.dataframe(df_tech, use_container_width=True)
-    
-    st.download_button(
-        label="📥 Exporter la liste de l'équipe (CSV)",
-        data=convertir_df_en_csv(df_tech),
-        file_name="equipe_techniciens.csv",
-        mime="text/csv",
-    )
-
-    suppr_tech = st.selectbox(
-        "Supprimer un technicien", [t["nom"] for t in techniciens]
-    )
-    if st.button("Supprimer le technicien"):
-      data["techniciens"] = [
-          t for t in techniciens if t["nom"] != suppr_tech
-      ]
-      sauvegarder_donnees(data)
-      st.success("Technicien supprimé.")
-      st.rerun()
-  else:
-    st.info("Aucun technicien enregistré.")
+    if techniciens_cons:
+      df_tc = pd.DataFrame(techniciens_cons)
+      st.dataframe(df_tc, use_container_width=True)
+      suppr_tc = st.selectbox(
+          "Supprimer tech. Cons.", [t["nom"] for t in techniciens_cons], key="s_tc"
+      )
+      if st.button("Supprimer Cons."):
+        data["techniciens_cons"] = [
+            t for t in techniciens_cons if t["nom"] != suppr_tc
+        ]
+        sauvegarder_donnees(data)
+        st.success("Supprimé.")
+        st.rerun()
+    else:
+      st.info("Aucun technicien consommables.")
 
 
 # --- ONGLET 6 : CONGÉS & ABSENCES ---
 with onglets[5]:
   st.header("🌴 Gestion des Congés & Absences")
 
-  if not techniciens:
-    st.warning("Veuillez d'abord enregistrer au moins un technicien.")
-  else:
-    with st.form("form_absence"):
-      c1, c2 = st.columns(2)
-      with c1:
-        op_absence = st.selectbox(
-            "Technicien", [t["nom"] for t in techniciens]
-        )
-        motif_absence = st.selectbox(
-            "Motif", ["Congés Payés", "RTT", "Maladie", "Formation", "Autre"]
-        )
-      with c2:
-        date_debut = st.date_input("Date de début", value=datetime.today())
-        date_fin = st.date_input(
-            "Date de fin", value=datetime.today() + timedelta(days=1)
-        )
+  col_abs1, col_abs2 = st.columns(2)
 
-      if st.form_submit_button("Enregistrer l'absence"):
-        nouvelle_absence = {
-            "id": f"ABS-{len(absences) + 1:03d}",
-            "technicien": op_absence,
-            "motif": motif_absence,
-            "date_debut": str(date_debut),
-            "date_fin": str(date_fin),
-        }
-        absences.append(nouvelle_absence)
-        data["absences"] = absences
-        sauvegarder_donnees(data)
-        st.success("Absence enregistrée.")
-        st.rerun()
+  with col_abs1:
+    st.subheader("Absences - Équipe Production")
+    if not techniciens_prod:
+      st.warning("Ajoutez d'abord des techniciens Prod.")
+    else:
+      with st.form("form_abs_prod"):
+        op_abs_p = st.selectbox(
+            "Technicien Prod", [t["nom"] for t in techniciens_prod]
+        )
+        motif_p = st.selectbox(
+            "Motif",
+            ["Congés Payés", "RTT", "Maladie", "Formation", "Autre"],
+            key="m_p",
+        )
+        d_deb_p = st.date_input("Date début", value=datetime.today(), key="dd_p")
+        d_fin_p = st.date_input(
+            "Date fin", value=datetime.today() + timedelta(days=1), key="df_p"
+        )
+        if st.form_submit_button("Enregistrer absence Prod"):
+          nouvelle_abs = {
+              "id": f"ABS-P-{len(absences_prod) + 1:03d}",
+              "technicien": op_abs_p,
+              "motif": motif_p,
+              "date_debut": str(d_deb_p),
+              "date_fin": str(d_fin_p),
+          }
+          absences_prod.append(nouvelle_abs)
+          data["absences_prod"] = absences_prod
+          sauvegarder_donnees(data)
+          st.success("Absence enregistrée.")
+          st.rerun()
 
-  st.subheader("Planning des absences")
-  if absences:
-    df_abs = pd.DataFrame(absences)
-    st.dataframe(df_abs, use_container_width=True)
-    
-    st.download_button(
-        label="📥 Exporter le planning des absences (CSV)",
-        data=convertir_df_en_csv(df_abs),
-        file_name="planning_absences.csv",
-        mime="text/csv",
-    )
+      if absences_prod:
+        st.dataframe(pd.DataFrame(absences_prod), use_container_width=True)
+        suppr_ap = st.selectbox(
+            "Supprimer absence ID", [a["id"] for a in absences_prod], key="sap"
+        )
+        if st.button("Supprimer", key="btn_sap"):
+          data["absences_prod"] = [
+              a for a in absences_prod if a["id"] != suppr_ap
+          ]
+          sauvegarder_donnees(data)
+          st.rerun()
 
-    suppr_abs = st.selectbox(
-        "Supprimer une absence (par ID)", [a["id"] for a in absences]
-    )
-    if st.button("Supprimer l'absence"):
-      data["absences"] = [a for a in absences if a["id"] != suppr_abs]
-      sauvegarder_donnees(data)
-      st.success("Absence supprimée.")
-      st.rerun()
-  else:
-    st.info("Aucune absence enregistrée.")
+  with col_abs2:
+    st.subheader("Absences - Équipe Consommables")
+    if not techniciens_cons:
+      st.warning("Ajoutez d'abord des techniciens Consommables.")
+    else:
+      with st.form("form_abs_cons"):
+        op_abs_c = st.selectbox(
+            "Technicien Consommables", [t["nom"] for t in techniciens_cons]
+        )
+        motif_c = st.selectbox(
+            "Motif",
+            ["Congés Payés", "RTT", "Maladie", "Formation", "Autre"],
+            key="m_c",
+        )
+        d_deb_c = st.date_input("Date début", value=datetime.today(), key="dd_c")
+        d_fin_c = st.date_input(
+            "Date fin", value=datetime.today() + timedelta(days=1), key="df_c"
+        )
+        if st.form_submit_button("Enregistrer absence Cons."):
+          nouvelle_abs_c = {
+              "id": f"ABS-C-{len(absences_cons) + 1:03d}",
+              "technicien": op_abs_c,
+              "motif": motif_c,
+              "date_debut": str(d_deb_c),
+              "date_fin": str(d_fin_c),
+          }
+          absences_cons.append(nouvelle_abs_c)
+          data["absences_cons"] = absences_cons
+          sauvegarder_donnees(data)
+          st.success("Absence enregistrée.")
+          st.rerun()
+
+      if absences_cons:
+        st.dataframe(pd.DataFrame(absences_cons), use_container_width=True)
+        suppr_ac = st.selectbox(
+            "Supprimer absence ID", [a["id"] for a in absences_cons], key="sac"
+        )
+        if st.button("Supprimer", key="btn_sac"):
+          data["absences_cons"] = [
+              a for a in absences_cons if a["id"] != suppr_ac
+          ]
+          sauvegarder_donnees(data)
+          st.rerun()
