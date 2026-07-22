@@ -140,6 +140,17 @@ st.set_page_config(
 
 data = charger_donnees()
 
+# --- BANDEAU TOUT EN HAUT ---
+st.markdown(
+    """
+    <div style="background-color: #f0f2f6; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 5px solid #ff4b4b;">
+        <h3 style="margin: 0; color: #31333F;">🧩 Atelier de Production - Pilotage & Planification en Cascade</h3>
+        <p style="margin: 5px 0 0 0; color: #555;">Gestion centralisée des sous-ensembles, des consommables, des charges et des plannings de l'équipe.</p>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
 st.title("🧩 Planification Cascade & Pilotage - Atelier")
 st.markdown("---")
 
@@ -150,6 +161,7 @@ onglets = st.tabs([
     "📅 Planification & Cascade",
     "👥 Équipe",
     "🌴 Congés & Absences",
+    "💾 Sauvegarde & Données",
 ])
 
 auj = datetime.today().date()
@@ -213,7 +225,6 @@ with onglets[0]:
 
   st.markdown("---")
 
-  # Tableaux de suivi centralisés sur l'écran 1 avec dates de début/fin cascade
   st.subheader("🛠️ Suivi détaillé des OFs Sous-ensembles (avec Cascade)")
   if ofs_se_cascade:
     df_dashboard_se = pd.DataFrame(ofs_se_cascade)
@@ -284,7 +295,6 @@ with onglets[1]:
     df_se = pd.DataFrame(liste_se_actuelle)
     st.dataframe(df_se, use_container_width=True)
 
-    # Option de suppression d'un sous-ensemble du catalogue
     id_a_supprimer = st.selectbox(
         "Sélectionner un Sous-ensemble à supprimer du catalogue",
         [item["id"] for item in liste_se_actuelle],
@@ -341,7 +351,6 @@ with onglets[2]:
     df_cons = pd.DataFrame(liste_cons_actuelle)
     st.dataframe(df_cons, use_container_width=True)
 
-    # Option de suppression d'un consommable du catalogue
     id_suppr_cons = st.selectbox(
         "Sélectionner un Consommable à supprimer du catalogue",
         [item["id"] for item in liste_cons_actuelle],
@@ -537,7 +546,6 @@ with onglets[3]:
     st.markdown(légende_markdown if légende_markdown else "Aucun technicien.")
 
     jours_semaine = [debut_semaine + timedelta(days=i) for i in range(5)]
-
     tous_ofs_cascade = ofs_se_cascade + ofs_cons_cascade
 
     grille_gantt_couleur = []
@@ -586,7 +594,7 @@ with onglets[3]:
     )
 
 
-# --- ONGLETS 5 & 6 (Équipe, Absences) ---
+# --- ONGLET 5 : ÉQUIPE ---
 with onglets[4]:
   st.header("👥 Gestion des Équipes")
   col_eq1, col_eq2 = st.columns(2)
@@ -602,7 +610,7 @@ with onglets[4]:
         sauvegarder_donnees(data)
         st.rerun()
     if techniciens_prod:
-      st.dataframe(pd.DataFrame(techniciens_prod))
+      st.dataframe(pd.DataFrame(techniciens_prod), use_container_width=True)
   with col_eq2:
     st.subheader("Techniciens Consommables")
     with st.form("form_tc"):
@@ -615,8 +623,10 @@ with onglets[4]:
         sauvegarder_donnees(data)
         st.rerun()
     if techniciens_cons:
-      st.dataframe(pd.DataFrame(techniciens_cons))
+      st.dataframe(pd.DataFrame(techniciens_cons), use_container_width=True)
 
+
+# --- ONGLET 6 : CONGÉS & ABSENCES ---
 with onglets[5]:
   st.header("🌴 Congés & Absences")
   c_ab1, c_ab2 = st.columns(2)
@@ -643,4 +653,52 @@ with onglets[5]:
           st.success("Absence enregistrée.")
           st.rerun()
       if absences_prod:
-        st.dataframe(pd.DataFrame(absences_prod))
+        st.dataframe(pd.DataFrame(absences_prod), use_container_width=True)
+
+
+# --- ONGLET 7 : SAUVEGARDE & DONNÉES (EXPORT / IMPORT) ---
+with onglets[6]:
+  st.header("💾 Gestion de la Base de Données (Sauvegarde & Import)")
+  st.markdown(
+      "Vous pouvez ici sauvegarder l'intégralité de vos données (catalogues,"
+      " plannings, équipes) sous forme de fichier JSON, ou restaurer une"
+      " sauvegarde précédente."
+  )
+
+  col_sav1, col_sav2 = st.columns(2)
+
+  with col_sav1:
+    st.subheader("📤 Sauvegarder / Exporter")
+    st.markdown("Télécharger la base de données active sur votre poste.")
+    json_str = json.dumps(data, ensure_ascii=False, indent=4)
+    st.download_button(
+        label="📥 Télécharger le fichier de sauvegarde (.json)",
+        data=json_str,
+        file_name=f"sauvegarde_atelier_{auj.strftime('%Y-%m-%d')}.json",
+        mime="application/json",
+    )
+
+  with col_sav2:
+    st.subheader("📥 Importer / Restaurer")
+    st.markdown(
+        "Remplacer les données actuelles par un fichier de sauvegarde JSON."
+    )
+    fichier_importe = st.file_uploader(
+        "Choisir un fichier de sauvegarde JSON", type=["json"]
+    )
+    if fichier_importe is not None:
+      if st.button("⚠️ Valider et restaurer cette base de données"):
+        try:
+          donnees_chargees = json.load(fichier_importe)
+          # Vérification basique des clés principales
+          if isinstance(donnees_chargees, dict):
+            sauvegarder_donnees(donnees_chargees)
+            st.success(
+                "Base de données importée et restaurée avec succès ! Rechargement"
+                " en cours..."
+            )
+            st.rerun()
+          else:
+            st.error("Format de fichier invalide.")
+        except Exception as e:
+          st.error(f"Erreur lors de l'importation du fichier : {e}")
