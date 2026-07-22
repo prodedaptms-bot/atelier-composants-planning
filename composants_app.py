@@ -72,14 +72,12 @@ def calculer_dates_cascade(
 
         securite = 0
         while heures_restantes > 0 and securite < 365:
-            # Sauter weekends et absences
             while curr_date.weekday() >= 5 or curr_date.strftime("%Y-%m-%d") in technicien_absences:
                 curr_date += timedelta(days=1)
 
             capacite_jour = HEURES_JOUR_DEFAUT
 
             if heures_restantes <= capacite_jour:
-                # La tâche se termine dans la journée courante
                 break
             else:
                 heures_restantes -= capacite_jour
@@ -90,9 +88,6 @@ def calculer_dates_cascade(
 
     planning_ordonnance = []
     priorite_poids = {"Urgente": 0, "Haute": 1, "Normale": 2}
-
-    for tech, ofs in ofs_par_tech if 'ofs_par_tech' in locals() else ofs_par_tech.items(): # Sécurité syntaxe
-        pass
 
     for tech, ofs in ofs_par_tech.items():
         ofs_tries = sorted(
@@ -118,15 +113,16 @@ def calculer_dates_cascade(
             temps_tot = p.get("temps_total_estime_h", 0.0)
             d_fin_reel = ajouter_jours_ouvres(d_debut_reel, temps_tot, tech)
 
-            # Identification de la semaine de début et de fin pour traçabilité
             semaine_debut = d_debut_reel - timedelta(days=d_debut_reel.weekday())
-            semaine_fin = semaine_debut + timedelta(days=4) # Vendredi
+            semaine_fin = semaine_debut + timedelta(days=4)
 
             p_maj = p.copy()
             p_maj["date_debut_cascade"] = str(d_debut_reel)
             p_maj["date_fin_cascade"] = str(d_fin_reel)
             p_maj["semaine_concernee"] = f"S{semaine_debut.isocalendar()[1]} ({semaine_debut.strftime('%d/%m')} au {semaine_fin.strftime('%d/%m')})"
             planning_ordonnance.append(p_maj)
+
+            date_dispo_courante = d_fin_reel + timedelta(days=1)
 
     for p in ofs_non_assignes:
         p_maj = p.copy()
