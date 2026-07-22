@@ -37,7 +37,7 @@ def convertir_df_en_csv(df):
 def calculer_dates_cascade(
     plannings, techniciens, absences, date_reference_debut
 ):
-    """Moteur d'ordonnancement en cascade (Forward Scheduling) tenant compte des absences et du découpage hebdomadaire."""
+    """Moteur d'ordonnancement en cascade (Forward Scheduling) respectant strictement la date de lancement souhaitée."""
     abs_par_tech = {}
     for abs_rec in absences:
         tech = abs_rec.get("technicien")
@@ -100,10 +100,14 @@ def calculer_dates_cascade(
 
         date_dispo_courante = date_reference_debut
 
-        for p in ofs_tries:
-            d_souhaitee = datetime.strptime(
-                p.get("date_lancement", str(date_reference_debut)), "%Y-%m-%d"
-            ).date()
+        for p in ops_tries if 'ops_tries' in locals() else ofs_tries: # Boucle propre sur les OFs triés
+            d_souhaitee_str = p.get("date_lancement", str(date_reference_debut))
+            try:
+                d_souhaitee = datetime.strptime(d_souhaitee_str, "%Y-%m-%d").date()
+            except:
+                d_souhaitee = date_reference_debut
+
+            # Le début réel prend en compte la disponibilité du tech MAIS AUSSI et surtout la date de lancement souhaitée
             d_debut_reel = max(d_souhaitee, date_dispo_courante)
 
             technicien_absences = abs_par_tech.get(tech, set())
@@ -122,7 +126,8 @@ def calculer_dates_cascade(
             p_maj["semaine_concernee"] = f"S{semaine_debut.isocalendar()[1]} ({semaine_debut.strftime('%d/%m')} au {semaine_fin.strftime('%d/%m')})"
             planning_ordonnance.append(p_maj)
 
-            date_dispo_courante = d_fin_reel + timedelta(days=1)
+            # La disponibilité pour l'OF suivant est reportée à la fin de celui-ci (ou reste à la date souhaitée si l'OF est planifié plus tard)
+            date_dispo_courante = max(date_dispo_courante, d_fin_reel + timedelta(days=1))
 
     for p in ofs_non_assignes:
         p_maj = p.copy()
@@ -132,7 +137,6 @@ def calculer_dates_cascade(
         planning_ordonnance.append(p_maj)
 
     return planning_ordonnance
-
 
 st.set_page_config(
     page_title="Planification - Atelier Sous-ensembles & Consommables",
