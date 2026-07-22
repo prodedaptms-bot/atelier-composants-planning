@@ -27,13 +27,9 @@ def sauvegarder_donnees(data):
     json.dump(data, f, ensure_ascii=False, indent=4)
 
 
-# Fonction pour exporter un DataFrame en Excel en mémoire
-def convertir_df_en_excel(df):
-  output = io.BytesIO()
-  with pd.ExcelWriter(output, engine="openpyxl") as writer:
-    df.to_excel(writer, index=False, sheet_name="Export_Atelier")
-  processed_data = output.getvalue()
-  return processed_data
+# Fonction pour exporter un DataFrame en CSV (compatible natif sans dépendance openpyxl)
+def convertir_df_en_csv(df):
+  return df.to_csv(index=False, sep=";", encoding="utf-8-sig").encode("utf-8-sig")
 
 
 st.set_page_config(
@@ -187,13 +183,12 @@ with onglets[0]:
       df_sh_se = pd.DataFrame(ofs_se_semaine)
       st.dataframe(df_sh_se, use_container_width=True)
       
-      # Bouton d'export Excel
-      excel_data = convertir_df_en_excel(df_sh_se)
+      csv_data = convertir_df_en_csv(df_sh_se)
       st.download_button(
-          label="📥 Exporter les OFs de la semaine (Excel)",
-          data=excel_data,
-          file_name=f"ofs_semaine_{debut_semaine}.xlsx",
-          mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          label="📥 Exporter les OFs de la semaine (CSV)",
+          data=csv_data,
+          file_name=f"ofs_semaine_{debut_semaine}.csv",
+          mime="text/csv",
       )
     else:
       st.info("Aucun sous-ensemble planifié cette semaine.")
@@ -203,12 +198,12 @@ with onglets[0]:
       df_sh_co = pd.DataFrame(ofs_cons_semaine)
       st.dataframe(df_sh_co, use_container_width=True)
       
-      excel_data_co = convertir_df_en_excel(df_sh_co)
+      csv_data_co = convertir_df_en_csv(df_sh_co)
       st.download_button(
-          label="📥 Exporter les Consommables de la semaine (Excel)",
-          data=excel_data_co,
-          file_name=f"consommables_semaine_{debut_semaine}.xlsx",
-          mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          label="📥 Exporter les Consommables de la semaine (CSV)",
+          data=csv_data_co,
+          file_name=f"consommables_semaine_{debut_semaine}.csv",
+          mime="text/csv",
       )
     else:
       st.info("Aucun consommable planifié/requis cette semaine.")
@@ -252,10 +247,10 @@ with onglets[1]:
     st.dataframe(df_catalogue_se, use_container_width=True)
     
     st.download_button(
-        label="📥 Exporter le catalogue (Excel)",
-        data=convertir_df_en_excel(df_catalogue_se),
-        file_name="catalogue_sous_ensembles.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        label="📥 Exporter le catalogue (CSV)",
+        data=convertir_df_en_csv(df_catalogue_se),
+        file_name="catalogue_sous_ensembles.csv",
+        mime="text/csv",
     )
   else:
     st.info("Aucun sous-ensemble configuré.")
@@ -296,10 +291,10 @@ with onglets[2]:
     st.dataframe(df_catalogue_cons, use_container_width=True)
     
     st.download_button(
-        label="📥 Exporter les consommables (Excel)",
-        data=convertir_df_en_excel(df_catalogue_cons),
-        file_name="catalogue_consommables.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        label="📥 Exporter les consommables (CSV)",
+        data=convertir_df_en_csv(df_catalogue_cons),
+        file_name="catalogue_consommables.csv",
+        mime="text/csv",
     )
   else:
     st.info("Aucune référence consommable enregistrée.")
@@ -371,10 +366,10 @@ with onglets[3]:
       st.dataframe(df_all_se, use_container_width=True)
 
       st.download_button(
-          label="📥 Exporter tous les OFs (Excel)",
-          data=convertir_df_en_excel(df_all_se),
-          file_name="tous_les_ofs_production.xlsx",
-          mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          label="📥 Exporter tous les OFs (CSV)",
+          data=convertir_df_en_csv(df_all_se),
+          file_name="tous_les_ofs_production.csv",
+          mime="text/csv",
       )
 
       id_mod_se = st.selectbox(
@@ -472,10 +467,10 @@ with onglets[3]:
       st.dataframe(df_all_co, use_container_width=True)
 
       st.download_button(
-          label="📥 Exporter tous les consommables planifiés (Excel)",
-          data=convertir_df_en_excel(df_all_co),
-          file_name="tous_les_consommables_planifies.xlsx",
-          mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          label="📥 Exporter tous les consommables planifiés (CSV)",
+          data=convertir_df_en_csv(df_all_co),
+          file_name="tous_les_consommables_planifies.csv",
+          mime="text/csv",
       )
 
       id_mod_c = st.selectbox(
@@ -521,17 +516,14 @@ with onglets[3]:
     st.subheader("📈 Vue de type Planning Hebdomadaire (Gantt - Semaine en Cours)")
     st.markdown(f"**Semaine du {debut_semaine.strftime('%d/%m/%Y')} au {fin_semaine.strftime('%d/%m/%Y')}**")
 
-    # Génération des jours de la semaine (Lundi -> Vendredi ou Dimanche)
-    jours_semaine = [debut_semaine + timedelta(days=i) for i in range(5)] # Lundi à Vendredi
+    jours_semaine = [debut_semaine + timedelta(days=i) for i in range(5)]
     noms_jours = [j.strftime("%A %d/%m") for j in jours_semaine]
 
-    # Construction d'une matrice simplifiée pour la vue visuelle (Gantt textuel/matrice)
     if plannings_se:
       lignes_gantt = []
       for p in plannings_se:
         try:
           d_l = datetime.strptime(p["date_lancement"], "%Y-%m-%d").date()
-          # On vérifie si l'OF tombe dans la semaine
           if debut_semaine <= d_l <= fin_semaine:
             jour_str = d_l.strftime("%A %d/%m")
             lignes_gantt.append({
@@ -546,18 +538,12 @@ with onglets[3]:
           pass
 
       if lignes_gantt:
-        df_gantt_brut = pd.DataFrame(lignes_gantt)
-        
-        # Création d'un tableau croisé simulant un Gantt de charge par jour
-        # Colonnes = Jours de la semaine, Lignes = Techniciens ou Sous-ensembles
         st.write("**Répartition des lancements sur la semaine :**")
         
-        # Tableau pivot visuel
         grille_affichage = []
         for tech in ["Tous / Non assigné"] + [t["nom"] for t in techniciens]:
           ligne_data = {"Technicien / Ressource": tech}
           for j_nom in noms_jours:
-            # Chercher les OFs ce jour-là pour ce tech
             if tech == "Tous / Non assigné":
               matches = [f"{x['Sous-ensemble']} (x{x['Qté']}) [{x['Statut']}]" for x in lignes_gantt if x['Jour'] == j_nom]
             else:
@@ -566,7 +552,15 @@ with onglets[3]:
             ligne_data[j_nom] = " | ".join(matches) if matches else ""
           grille_affichage.append(ligne_data)
 
-        st.dataframe(pd.DataFrame(grille_affichage), use_container_width=True)
+        df_grille = pd.DataFrame(grille_affichage)
+        st.dataframe(df_grille, use_container_width=True)
+        
+        st.download_button(
+            label="📥 Exporter la vue Gantt / Semaine (CSV)",
+            data=convertir_df_en_csv(df_grille),
+            file_name=f"gantt_semaine_{debut_semaine}.csv",
+            mime="text/csv",
+        )
       else:
         st.info("Aucun ordre de fabrication positionné pour cette semaine dans la vue Gantt.")
     else:
@@ -610,10 +604,10 @@ with onglets[4]:
     st.dataframe(df_tech, use_container_width=True)
     
     st.download_button(
-        label="📥 Exporter la liste de l'équipe (Excel)",
-        data=convertir_df_en_excel(df_tech),
-        file_name="equipe_techniciens.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        label="📥 Exporter la liste de l'équipe (CSV)",
+        data=convertir_df_en_csv(df_tech),
+        file_name="equipe_techniciens.csv",
+        mime="text/csv",
     )
 
     suppr_tech = st.selectbox(
@@ -672,10 +666,10 @@ with onglets[5]:
     st.dataframe(df_abs, use_container_width=True)
     
     st.download_button(
-        label="📥 Exporter le planning des absences (Excel)",
-        data=convertir_df_en_excel(df_abs),
-        file_name="planning_absences.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        label="📥 Exporter le planning des absences (CSV)",
+        data=convertir_df_en_csv(df_abs),
+        file_name="planning_absences.csv",
+        mime="text/csv",
     )
 
     suppr_abs = st.selectbox(
