@@ -341,14 +341,45 @@ with onglets[2]:
         st.subheader("Ajouter un nouveau Consommable")
         nom_cons = st.text_input("Nom du Consommable")
         ref_cons = st.text_input("Référence / Code Consommable")
-        temps_fab_cons = st.number_input(
-            "Temps de fabrication unitaire (heures)",
-            min_value=0.1,
-            value=0.5,
-            step=0.1,
-            key="t_fab_c",
+
+        # Choix du mode de saisie du temps
+        mode_saisie = st.radio(
+            "Mode de calcul du temps de fabrication",
+            [
+                "Temps unitaire direct (ex: X heures par pièce)",
+                "Lot de production (ex: X pièces pour Y heures)",
+            ],
         )
-        desc_cons = st.text_area("Description / Instructions Consommable", key="desc_c")
+
+        if mode_saisie == "Temps unitaire direct (ex: X heures par pièce)":
+            temps_fab_cons = st.number_input(
+                "Temps de fabrication unitaire (heures)",
+                min_value=0.01,
+                value=0.5,
+                step=0.01,
+            )
+            calcul_temps_unitaire = temps_fab_cons
+        else:
+            col_lot1, col_lot2 = st.columns(2)
+            with col_lot1:
+                qte_lot_ref = st.number_input(
+                    "Quantité de pièces du lot", min_value=1, value=60
+                )
+            with col_lot2:
+                temps_lot_ref = st.number_input(
+                    "Temps total pour ce lot (heures)", min_value=0.1, value=8.0
+                )
+
+            calcul_temps_unitaire = temps_lot_ref / qte_lot_ref
+            st.info(
+                f"💡 Temps unitaire recalculé automatiquement :"
+                f" **{calcul_temps_unitaire:.4f} h / pièce** (soit {temps_lot_ref}h"
+                f" pour {qte_lot_ref} pièces)."
+            )
+
+        desc_cons = st.text_area(
+            "Description / Instructions Consommable", key="desc_c"
+        )
 
         if st.form_submit_button("Enregistrer le Consommable"):
             if nom_cons:
@@ -356,7 +387,7 @@ with onglets[2]:
                     "id": f"CONS-{len(data.get('consommables', [])) + 1:03d}",
                     "nom": nom_cons,
                     "reference": ref_cons,
-                    "temps_fabrication": temps_fab_cons,
+                    "temps_fabrication": calcul_temps_unitaire,
                     "description": desc_cons,
                 }
                 data.setdefault("consommables", []).append(nouveau_modele_cons)
