@@ -140,16 +140,13 @@ st.set_page_config(
 
 data = charger_donnees()
 
-# --- BANDEAU TOUT EN HAUT ---
-st.markdown(
-    """
-    <div style="background-color: #f0f2f6; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 5px solid #ff4b4b;">
-        <h3 style="margin: 0; color: #31333F;">🧩 Atelier de Production - Pilotage & Planification en Cascade</h3>
-        <p style="margin: 5px 0 0 0; color: #555;">Gestion centralisée des sous-ensembles, des consommables, des charges et des plannings de l'équipe.</p>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
+# --- BANDEAU IMAGE TOUT EN HAUT ---
+if os.path.exists("fond_bandeau.jpg"):
+  st.image("fond_bandeau.jpg", use_container_width=True)
+else:
+  st.warning(
+      "Image 'fond_bandeau.jpg' introuvable dans le dossier du script."
+  )
 
 st.title("🧩 Planification Cascade & Pilotage - Atelier")
 st.markdown("---")
@@ -175,7 +172,6 @@ techniciens_cons = data.get("techniciens_cons", [])
 absences_prod = data.get("absences_prod", [])
 absences_cons = data.get("absences_cons", [])
 
-# Calcul automatique de la cascade
 ofs_se_cascade = calculer_dates_cascade(
     plannings_se, techniciens_prod, absences_prod, debut_semaine
 )
@@ -690,7 +686,6 @@ with onglets[6]:
       if st.button("⚠️ Valider et restaurer cette base de données"):
         try:
           donnees_chargees = json.load(fichier_importe)
-          # Vérification basique des clés principales
           if isinstance(donnees_chargees, dict):
             sauvegarder_donnees(donnees_chargees)
             st.success(
