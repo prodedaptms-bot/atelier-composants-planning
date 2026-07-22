@@ -127,7 +127,6 @@ def calculer_dates_cascade(
   for p in ofs_non_assignes:
     p_maj = p.copy()
     p_maj["date_debut_cascade"] = p.get("date_lancement")
-    # Pour un non assigné, on estime un jour unique de fin
     p_maj["date_fin_cascade"] = p.get("date_lancement")
     planning_ordonnance.append(p_maj)
 
@@ -246,6 +245,119 @@ with onglets[0]:
     st.info("Aucun OF Consommable enregistré.")
 
 
+# --- ONGLET 2 : CRÉATION SOUS-ENSEMBLES ---
+with onglets[1]:
+  st.header("⚙️ Gestion & Création des Sous-ensembles")
+
+  with st.form("form_creer_se"):
+    st.subheader("Ajouter un nouveau modèle de Sous-ensemble")
+    nom_se = st.text_input("Nom du Sous-ensemble")
+    ref_se = st.text_input("Référence / Code")
+    temps_fab_se = st.number_input(
+        "Temps de fabrication unitaire (heures)",
+        min_value=0.1,
+        value=1.0,
+        step=0.1,
+    )
+    desc_se = st.text_area("Description / Instructions")
+
+    if st.form_submit_button("Enregistrer le Sous-ensemble"):
+      if nom_se:
+        nouveau_modele_se = {
+            "id": f"SE-{len(data.get('sous_ensembles', [])) + 1:03d}",
+            "nom": nom_se,
+            "reference": ref_se,
+            "temps_fabrication": temps_fab_se,
+            "description": desc_se,
+        }
+        data.setdefault("sous_ensembles", []).append(nouveau_modele_se)
+        sauvegarder_donnees(data)
+        st.success(f"Sous-ensemble '{nom_se}' créé avec succès !")
+        st.rerun()
+      else:
+        st.error("Le nom du sous-ensemble est obligatoire.")
+
+  st.markdown("---")
+  st.subheader("Catalogue actuel des Sous-ensembles")
+  liste_se_actuelle = data.get("sous_ensembles", [])
+  if liste_se_actuelle:
+    df_se = pd.DataFrame(liste_se_actuelle)
+    st.dataframe(df_se, use_container_width=True)
+
+    # Option de suppression d'un sous-ensemble du catalogue
+    id_a_supprimer = st.selectbox(
+        "Sélectionner un Sous-ensemble à supprimer du catalogue",
+        [item["id"] for item in liste_se_actuelle],
+        key="suppr_cat_se",
+    )
+    if st.button("Supprimer ce Sous-ensemble"):
+      data["sous_ensembles"] = [
+          item for item in liste_se_actuelle if item["id"] != id_a_supprimer
+      ]
+      sauvegarder_donnees(data)
+      st.success("Sous-ensemble supprimé.")
+      st.rerun()
+  else:
+    st.info("Aucun sous-ensemble configuré pour l'instant.")
+
+
+# --- ONGLET 3 : RÉFÉRENCES CONSOMMABLES ---
+with onglets[2]:
+  st.header("📦 Gestion & Références des Consommables")
+
+  with st.form("form_creer_cons"):
+    st.subheader("Ajouter un nouveau Consommable")
+    nom_cons = st.text_input("Nom du Consommable")
+    ref_cons = st.text_input("Référence / Code Consommable")
+    temps_fab_cons = st.number_input(
+        "Temps de fabrication unitaire (heures)",
+        min_value=0.1,
+        value=0.5,
+        step=0.1,
+        key="t_fab_c",
+    )
+    desc_cons = st.text_area("Description / Instructions Consommable", key="desc_c")
+
+    if st.form_submit_button("Enregistrer le Consommable"):
+      if nom_cons:
+        nouveau_modele_cons = {
+            "id": f"CONS-{len(data.get('consommables', [])) + 1:03d}",
+            "nom": nom_cons,
+            "reference": ref_cons,
+            "temps_fabrication": temps_fab_cons,
+            "description": desc_cons,
+        }
+        data.setdefault("consommables", []).append(nouveau_modele_cons)
+        sauvegarder_donnees(data)
+        st.success(f"Consommable '{nom_cons}' créé avec succès !")
+        st.rerun()
+      else:
+        st.error("Le nom du consommable est obligatoire.")
+
+  st.markdown("---")
+  st.subheader("Catalogue actuel des Consommables")
+  liste_cons_actuelle = data.get("consommables", [])
+  if liste_cons_actuelle:
+    df_cons = pd.DataFrame(liste_cons_actuelle)
+    st.dataframe(df_cons, use_container_width=True)
+
+    # Option de suppression d'un consommable du catalogue
+    id_suppr_cons = st.selectbox(
+        "Sélectionner un Consommable à supprimer du catalogue",
+        [item["id"] for item in liste_cons_actuelle],
+        key="suppr_cat_cons",
+    )
+    if st.button("Supprimer ce Consommable"):
+      data["consommables"] = [
+          item for item in liste_cons_actuelle if item["id"] != id_suppr_cons
+      ]
+      sauvegarder_donnees(data)
+      st.success("Consommable supprimé.")
+      st.rerun()
+  else:
+    st.info("Aucun consommable configuré pour l'instant.")
+
+
 # --- ONGLET 4 : PLANIFICATION & CASCADE ---
 with onglets[3]:
   st.header("📅 Ordonnancement en Cascade & Vues Gantt Semaine")
@@ -295,6 +407,11 @@ with onglets[3]:
           sauvegarder_donnees(data)
           st.success("OF planifié avec succès.")
           st.rerun()
+    else:
+      st.warning(
+          "Veuillez d'abord créer des sous-ensembles dans l'onglet '⚙️ Création"
+          " Sous-ensembles'."
+      )
 
   with sub_tab2:
     liste_cons = data.get("consommables", [])
@@ -339,6 +456,11 @@ with onglets[3]:
           sauvegarder_donnees(data)
           st.success("Planification consommable enregistrée.")
           st.rerun()
+    else:
+      st.warning(
+          "Veuillez d'abord créer des consommables dans l'onglet '📦 Références"
+          " Consommables'."
+      )
 
   with sub_tab_cascade:
     st.subheader("⚡ Gestion & Actions sur les OFs")
@@ -391,7 +513,6 @@ with onglets[3]:
     )
 
     tous_techs = [t["nom"] for t in techniciens_prod + techniciens_cons]
-    # Palette de couleurs distinctes par technicien
     palette_couleurs = [
         "🔵",
         "🟢",
@@ -416,12 +537,10 @@ with onglets[3]:
     st.markdown(légende_markdown if légende_markdown else "Aucun technicien.")
 
     jours_semaine = [debut_semaine + timedelta(days=i) for i in range(5)]
-    noms_jours = [j.strftime("%A %d/%m") for j in jours_semaine]
 
     tous_ofs_cascade = ofs_se_cascade + ofs_cons_cascade
 
     grille_gantt_couleur = []
-    # Ligne pour les non assignés
     ligne_na = {"Technicien": "Non assigné ⚪"}
     for j in jours_semaine:
       j_str = str(j)
@@ -467,17 +586,7 @@ with onglets[3]:
     )
 
 
-# --- ONGLETS 2, 3, 5, 6 (Catalogues, Équipe, Absences) ---
-with onglets[1]:
-  st.header("Catalogue des Sous-ensembles")
-  if data.get("sous_ensembles"):
-    st.dataframe(pd.DataFrame(data["sous_ensembles"]), use_container_width=True)
-
-with onglets[2]:
-  st.header("Catalogue des Consommables")
-  if data.get("consommables"):
-    st.dataframe(pd.DataFrame(data["consommables"]), use_container_width=True)
-
+# --- ONGLETS 5 & 6 (Équipe, Absences) ---
 with onglets[4]:
   st.header("👥 Gestion des Équipes")
   col_eq1, col_eq2 = st.columns(2)
