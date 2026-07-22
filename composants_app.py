@@ -1,7 +1,9 @@
 from datetime import datetime, timedelta
+import io
 import json
 import os
 import pandas as pd
+from fpdf import FPDF
 import streamlit as st
 
 DATA_FILE = "donnees_composants.json"
@@ -32,6 +34,98 @@ def sauvegarder_donnees(data):
 
 def convertir_df_en_csv(df):
   return df.to_csv(index=False, sep=";", encoding="utf-8-sig").encode("utf-8-sig")
+
+
+def generer_pdf_cahier_des_charges():
+  pdf = FPDF()
+  pdf.add_page()
+  pdf.set_auto_page_break(auto=True, margin=15)
+
+  # En-tête / Titre
+  pdf.set_font("helvetica", "B", 16)
+  pdf.cell(
+      0,
+      10,
+      text=(
+          "CAHIER DES CHARGES & MODE D'EMPLOI - PILOTAGE ATELIER FOCALTERHICS"
+      ),
+      new_x="LMARGIN",
+      new_y="NEXT",
+      align="C",
+  )
+  pdf.set_font("helvetica", "I", 10)
+  pdf.cell(
+      0,
+      8,
+      text=(
+          "Application de Planification Cascade, Gestion de Catalogues et"
+          " Suivi d'atelier"
+      ),
+      new_x="LMARGIN",
+      new_y="NEXT",
+      align="C",
+  )
+  pdf.ln(5)
+
+  # 1. Cahier des charges
+  pdf.set_font("helvetica", "B", 12)
+  pdf.cell(
+      0, 8, text="1. CAHIER DES CHARGES FONCTIONNEL", new_x="LMARGIN", new_y="NEXT"
+  )
+  pdf.set_font("helvetica", "", 10)
+
+  cdc_texte = (
+      "L'application a pour objectif de piloter de manière centralisée les"
+      " flux de production de l'atelier (Sous-ensembles et Consommables).\n\n"
+      "Fonctionnalités principales :\n"
+      "- Gestion des Catalogues : Création, consultation et suppression des"
+      " modèles de sous-ensembles et de consommables avec temps unitaires.\n"
+      "- Ordonnancement en Cascade (Forward Scheduling) : Planification"
+      " automatique des Ordres de Fabrication (OF) en tenant compte de la"
+      " charge, des priorités et des absences (congés, RTT, maladie) des"
+      " techniciens.\n"
+      "- Tableaux de Bord Centralisés : Suivi des charges globales par"
+      " section, détection des surcharges par rapport aux capacités disponibles"
+      " (35h/semaine par défaut).\n"
+      "- Vues Gantt Semaine par Technicien : Représentation visuelle avec codes"
+      " couleur uniques par technicien pour l'affectation journalière.\n"
+      "- Gestion des Ressources : Suivi des effectifs (production et"
+      " consommables) et des absences/congés.\n"
+      "- Sécurité et Portabilité : Sauvegarde et restauration complète de la"
+      " base de données au format JSON, et exports tabulaires au format CSV."
+  )
+  pdf.multi_cell(0, 6, text=cdc_texte)
+  pdf.ln(5)
+
+  # 2. Mode d'emploi
+  pdf.set_font("helvetica", "B", 12)
+  pdf.cell(0, 8, text="2. MODE D'EMPLOI OPÉRATIONNEL", new_x="LMARGIN", new_y="NEXT")
+  pdf.set_font("helvetica", "", 10)
+
+  mode_emploi_texte = (
+      "Étape 1 - Configuration des Équipes :\n"
+      "Rendez-vous dans l'onglet 'Équipe' pour enregistrer les techniciens de"
+      " production et de consommables.\n\n"
+      "Étape 2 - Alimentation des Catalogues :\n"
+      "Utilisez les onglets 'Création Sous-ensembles' et 'Références"
+      " Consommables' pour définir vos gammes et leurs temps unitaires de"
+      " fabrication.\n\n"
+      "Étape 3 - Saisie des Absences :\n"
+      "Renseignez les congés ou absences dans l'onglet 'Congés & Absences'"
+      " afin que le moteur de cascade puisse réajuster automatiquement les"
+      " plannings.\n\n"
+      "Étape 4 - Lancement des OFs et Planification :\n"
+      "Dans l'onglet 'Planification & Cascade', lancez vos OFs en choisissant"
+      " la quantité, la date souhaitée et le technicien assigné. Le système"
+      " calcule dynamiquement les dates de début et de fin réelles.\n\n"
+      "Étape 5 - Pilotage et Suivi :\n"
+      "Consultez le 'Tableau de Bord' pour veiller aux équilibres de charge et"
+      " utilisez l'onglet 'Sauvegarde & Données' pour exporter vos rapports"
+      " ou sauvegarder la base."
+  )
+  pdf.multi_cell(0, 6, text=mode_emploi_texte)
+
+  return pdf.output()
 
 
 def calculer_dates_cascade(
@@ -652,19 +746,35 @@ with onglets[5]:
         st.dataframe(pd.DataFrame(absences_prod), use_container_width=True)
 
 
-# --- ONGLET 7 : SAUVEGARDE & DONNÉES (EXPORT / IMPORT) ---
+# --- ONGLET 7 : SAUVEGARDE, DONNÉES & DOCUMENTATION PDF ---
 with onglets[6]:
-  st.header("💾 Gestion de la Base de Données (Sauvegarde & Import)")
+  st.header("💾 Gestion de la Base de Données & Documentation")
   st.markdown(
-      "Vous pouvez ici sauvegarder l'intégralité de vos données (catalogues,"
-      " plannings, équipes) sous forme de fichier JSON, ou restaurer une"
-      " sauvegarde précédente."
+      "Gérez vos sauvegardes JSON, importez une base existante, ou téléchargez"
+      " le cahier des charges et le mode d'emploi de l'application au format"
+      " PDF."
   )
 
+  st.markdown("---")
+  st.subheader("📄 Documentation Officielle (PDF)")
+  st.markdown(
+      "Télécharger le document officiel synthétisant le cahier des charges et"
+      " le mode d'emploi de l'outil."
+  )
+
+  pdf_bytes = generer_pdf_cahier_des_charges()
+  st.download_button(
+      label="📥 Télécharger le Cahier des charges & Mode d'emploi (.pdf)",
+      data=pdf_bytes,
+      file_name="cahier_des_charges_et_mode_emploi_atelier.pdf",
+      mime="application/pdf",
+  )
+
+  st.markdown("---")
   col_sav1, col_sav2 = st.columns(2)
 
   with col_sav1:
-    st.subheader("📤 Sauvegarder / Exporter")
+    st.subheader("📤 Sauvegarder / Exporter (JSON)")
     st.markdown("Télécharger la base de données active sur votre poste.")
     json_str = json.dumps(data, ensure_ascii=False, indent=4)
     st.download_button(
@@ -675,7 +785,7 @@ with onglets[6]:
     )
 
   with col_sav2:
-    st.subheader("📥 Importer / Restaurer")
+    st.subheader("📥 Importer / Restaurer (JSON)")
     st.markdown(
         "Remplacer les données actuelles par un fichier de sauvegarde JSON."
     )
