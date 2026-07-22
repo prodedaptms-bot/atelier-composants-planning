@@ -198,6 +198,7 @@ capacite_dispo_cons_h = len(techniciens_cons) * CAPACITE_HEBDO
 # --- ONGLET 1 : TABLEAU DE BORD ---
 # --- ONGLET 1 : TABLEAU DE BORD ---
 # --- ONGLET 1 : TABLEAU DE BORD ---
+# --- ONGLET 1 : TABLEAU DE BORD ---
 with onglets[0]:
     st.header("📊 Tableau de Bord & Suivi des OFs")
     st.markdown(
@@ -248,34 +249,43 @@ with onglets[0]:
 
     st.markdown("---")
 
-    # --- SYNTHÈSE DE CHARGE PAR TECHNICIEN ET PAR SEMAINE ---
-    st.subheader("👥 Suivi de la charge par Technicien & par Semaine")
+    # --- SYNTHÈSE DE CHARGE PAR TECHNICIEN ET PAR SEMAINE (Format clair & Colonnes larges) ---
+    st.subheader("👥 Suivi détaillé de la charge par Technicien et par Semaine")
     tous_ofs_synthese = ofs_se_cascade + ofs_cons_cascade
+    
     if tous_ofs_synthese:
         df_synth = pd.DataFrame(tous_ofs_synthese)
         df_synth_actifs = df_synth[~df_synth["statut"].isin(["Terminé", "Supprimé"])]
         
         if not df_synth_actifs.empty and "semaine_concernee" in df_synth_actifs.columns:
-            # Remplacement des valeurs vides ou non assignées pour la lisibilité
             df_synth_actifs["assigne"] = df_synth_actifs["assigne"].fillna("Non assigné")
             
-            # Création d'un tableau croisé (pivot table) : Lignes = Techniciens, Colonnes = Semaines
-            pivot_charge = df_synth_actifs.pivot_table(
-                index="assigne",
-                columns="semaine_concernee",
-                values="temps_total_estime_h",
-                aggfunc="sum",
-                fill_value=0.0
+            # Agrégation par Technicien et par Semaine
+            df_charge_tech_sem = (
+                df_synth_actifs.groupby(["assigne", "semaine_concernee"])["temps_total_estime_h"]
+                .sum()
+                .reset_index()
+            )
+            df_charge_tech_sem.columns = ["Technicien", "Semaine", "Charge Totale (h)"]
+            
+            # Utilisation de column_config pour garantir une largeur de colonne suffisante pour les prénoms
+            st.dataframe(
+                df_charge_tech_sem,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Technicien": st.column_config.TextColumn("Technicien", width="medium"),
+                    "Semaine": st.column_config.TextColumn("Semaine", width="medium"),
+                    "Charge Totale (h)": st.column_config.NumberColumn("Charge Totale (h)", format="%.1f h")
+                }
             )
             
-            st.dataframe(pivot_charge, use_container_width=True)
-            
             st.download_button(
-                label="📥 Exporter la charge par technicien (CSV)",
-                data=convertir_df_en_csv(pivot_charge.reset_index()),
-                file_name="charge_par_technicien_semaine.csv",
+                label="📥 Exporter la charge par technicien et semaine (CSV)",
+                data=convertir_df_en_csv(df_charge_tech_sem),
+                file_name="charge_technicien_semaine.csv",
                 mime="text/csv",
-                key="exp_charge_tech"
+                key="exp_charge_tech_sem"
             )
         else:
             st.info("Aucune charge active à ventiler.")
