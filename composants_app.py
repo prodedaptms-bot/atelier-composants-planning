@@ -91,7 +91,7 @@ def calculer_dates_cascade(
     planning_ordonnance = []
     priorite_poids = {"Urgente": 0, "Haute": 1, "Normale": 2}
 
-    for tech, ofs in ods_par_tech if 'ofs_par_tech' in locals() else ofs_par_tech.items(): # Sécurité syntaxe
+    for tech, ofs in ofs_par_tech if 'ofs_par_tech' in locals() else ofs_par_tech.items(): # Sécurité syntaxe
         pass
 
     for tech, ofs in ofs_par_tech.items():
