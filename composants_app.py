@@ -1,3 +1,4 @@
+import io
 import json
 import os
 from datetime import datetime, timedelta
@@ -24,6 +25,15 @@ def charger_donnees():
 def sauvegarder_donnees(data):
   with open(DATA_FILE, "w", encoding="utf-8") as f:
     json.dump(data, f, ensure_ascii=False, indent=4)
+
+
+# Fonction pour exporter un DataFrame en Excel en mémoire
+def convertir_df_en_excel(df):
+  output = io.BytesIO()
+  with pd.ExcelWriter(output, engine="openpyxl") as writer:
+    df.to_excel(writer, index=False, sheet_name="Export_Atelier")
+  processed_data = output.getvalue()
+  return processed_data
 
 
 st.set_page_config(
@@ -174,12 +184,32 @@ with onglets[0]:
   )
   with tab_det1:
     if ofs_se_semaine:
-      st.dataframe(pd.DataFrame(ofs_se_semaine), use_container_width=True)
+      df_sh_se = pd.DataFrame(ofs_se_semaine)
+      st.dataframe(df_sh_se, use_container_width=True)
+      
+      # Bouton d'export Excel
+      excel_data = convertir_df_en_excel(df_sh_se)
+      st.download_button(
+          label="📥 Exporter les OFs de la semaine (Excel)",
+          data=excel_data,
+          file_name=f"ofs_semaine_{debut_semaine}.xlsx",
+          mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      )
     else:
       st.info("Aucun sous-ensemble planifié cette semaine.")
+
   with tab_det2:
     if ofs_cons_semaine:
-      st.dataframe(pd.DataFrame(ofs_cons_semaine), use_container_width=True)
+      df_sh_co = pd.DataFrame(ofs_cons_semaine)
+      st.dataframe(df_sh_co, use_container_width=True)
+      
+      excel_data_co = convertir_df_en_excel(df_sh_co)
+      st.download_button(
+          label="📥 Exporter les Consommables de la semaine (Excel)",
+          data=excel_data_co,
+          file_name=f"consommables_semaine_{debut_semaine}.xlsx",
+          mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      )
     else:
       st.info("Aucun consommable planifié/requis cette semaine.")
 
@@ -218,7 +248,15 @@ with onglets[1]:
 
   st.subheader("Catalogue des sous-ensembles")
   if data.get("sous_ensembles"):
-    st.dataframe(pd.DataFrame(data["sous_ensembles"]), use_container_width=True)
+    df_catalogue_se = pd.DataFrame(data["sous_ensembles"])
+    st.dataframe(df_catalogue_se, use_container_width=True)
+    
+    st.download_button(
+        label="📥 Exporter le catalogue (Excel)",
+        data=convertir_df_en_excel(df_catalogue_se),
+        file_name="catalogue_sous_ensembles.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
   else:
     st.info("Aucun sous-ensemble configuré.")
 
@@ -254,7 +292,15 @@ with onglets[2]:
 
   st.subheader("Liste des références consommables")
   if data.get("consommables"):
-    st.dataframe(pd.DataFrame(data["consommables"]), use_container_width=True)
+    df_catalogue_cons = pd.DataFrame(data["consommables"])
+    st.dataframe(df_catalogue_cons, use_container_width=True)
+    
+    st.download_button(
+        label="📥 Exporter les consommables (Excel)",
+        data=convertir_df_en_excel(df_catalogue_cons),
+        file_name="catalogue_consommables.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
   else:
     st.info("Aucune référence consommable enregistrée.")
 
@@ -267,9 +313,11 @@ with onglets[3]:
   liste_cons = data.get("consommables", [])
   liste_tech = [t["nom"] for t in data.get("techniciens", [])]
 
-  sub_tab1, sub_tab2 = st.tabs(
-      ["🛠️ Lancer un OF Sous-ensemble", "📦 Planifier un Consommable"]
-  )
+  sub_tab1, sub_tab2, sub_tab_gantt = st.tabs([
+      "🛠️ Lancer un OF Sous-ensemble",
+      "📦 Planifier un Consommable",
+      "📈 Vue Gantt Semaine",
+  ])
 
   with sub_tab1:
     if not liste_se:
@@ -319,13 +367,19 @@ with onglets[3]:
 
     st.subheader("Suivi & Gestion des OF Sous-ensembles")
     if plannings_se:
-      st.dataframe(pd.DataFrame(plannings_se), use_container_width=True)
+      df_all_se = pd.DataFrame(plannings_se)
+      st.dataframe(df_all_se, use_container_width=True)
+
+      st.download_button(
+          label="📥 Exporter tous les OFs (Excel)",
+          data=convertir_df_en_excel(df_all_se),
+          file_name="tous_les_ofs_production.xlsx",
+          mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      )
 
       id_mod_se = st.selectbox(
           "Sélectionner un OF (par ID)", [p["id_plan"] for p in plannings_se]
       )
-
-      # Récupération de l'OF sélectionné pour afficher l'état actuel si besoin
       of_courant = next(
           (p for p in plannings_se if p["id_plan"] == id_mod_se), None
       )
@@ -362,7 +416,7 @@ with onglets[3]:
             st.rerun()
 
       with col_d:
-        st.write("")  # Espace d'alignement
+        st.write("")
         if st.button("🗑️ Supprimer OF"):
           data["planification_se"] = [
               p for p in plannings_se if p["id_plan"] != id_mod_se
@@ -414,7 +468,15 @@ with onglets[3]:
 
     st.subheader("Suivi & Gestion des Consommables planifiés")
     if plannings_cons:
-      st.dataframe(pd.DataFrame(plannings_cons), use_container_width=True)
+      df_all_co = pd.DataFrame(plannings_cons)
+      st.dataframe(df_all_co, use_container_width=True)
+
+      st.download_button(
+          label="📥 Exporter tous les consommables planifiés (Excel)",
+          data=convertir_df_en_excel(df_all_co),
+          file_name="tous_les_consommables_planifies.xlsx",
+          mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      )
 
       id_mod_c = st.selectbox(
           "Sélectionner un consommable (par ID)",
@@ -455,6 +517,61 @@ with onglets[3]:
           st.error(f"Ligne {id_mod_c} supprimée.")
           st.rerun()
 
+  with sub_tab_gantt:
+    st.subheader("📈 Vue de type Planning Hebdomadaire (Gantt - Semaine en Cours)")
+    st.markdown(f"**Semaine du {debut_semaine.strftime('%d/%m/%Y')} au {fin_semaine.strftime('%d/%m/%Y')}**")
+
+    # Génération des jours de la semaine (Lundi -> Vendredi ou Dimanche)
+    jours_semaine = [debut_semaine + timedelta(days=i) for i in range(5)] # Lundi à Vendredi
+    noms_jours = [j.strftime("%A %d/%m") for j in jours_semaine]
+
+    # Construction d'une matrice simplifiée pour la vue visuelle (Gantt textuel/matrice)
+    if plannings_se:
+      lignes_gantt = []
+      for p in plannings_se:
+        try:
+          d_l = datetime.strptime(p["date_lancement"], "%Y-%m-%d").date()
+          # On vérifie si l'OF tombe dans la semaine
+          if debut_semaine <= d_l <= fin_semaine:
+            jour_str = d_l.strftime("%A %d/%m")
+            lignes_gantt.append({
+                "ID": p["id_plan"],
+                "Sous-ensemble": p["sous_ensemble"],
+                "Qté": p["quantite"],
+                "Technicien": p["assigne"],
+                "Statut": p["statut"],
+                "Jour": jour_str
+            })
+        except:
+          pass
+
+      if lignes_gantt:
+        df_gantt_brut = pd.DataFrame(lignes_gantt)
+        
+        # Création d'un tableau croisé simulant un Gantt de charge par jour
+        # Colonnes = Jours de la semaine, Lignes = Techniciens ou Sous-ensembles
+        st.write("**Répartition des lancements sur la semaine :**")
+        
+        # Tableau pivot visuel
+        grille_affichage = []
+        for tech in ["Tous / Non assigné"] + [t["nom"] for t in techniciens]:
+          ligne_data = {"Technicien / Ressource": tech}
+          for j_nom in noms_jours:
+            # Chercher les OFs ce jour-là pour ce tech
+            if tech == "Tous / Non assigné":
+              matches = [f"{x['Sous-ensemble']} (x{x['Qté']}) [{x['Statut']}]" for x in lignes_gantt if x['Jour'] == j_nom]
+            else:
+              matches = [f"{x['Sous-ensemble']} (x{x['Qté']}) [{x['Statut']}]" for x in lignes_gantt if x['Jour'] == j_nom and x['Technicien'] == tech]
+            
+            ligne_data[j_nom] = " | ".join(matches) if matches else ""
+          grille_affichage.append(ligne_data)
+
+        st.dataframe(pd.DataFrame(grille_affichage), use_container_width=True)
+      else:
+        st.info("Aucun ordre de fabrication positionné pour cette semaine dans la vue Gantt.")
+    else:
+      st.info("Aucun OF disponible.")
+
 
 # --- ONGLET 5 : ÉQUIPE ---
 with onglets[4]:
@@ -489,7 +606,16 @@ with onglets[4]:
 
   st.subheader("Liste des techniciens")
   if techniciens:
-    st.dataframe(pd.DataFrame(techniciens), use_container_width=True)
+    df_tech = pd.DataFrame(techniciens)
+    st.dataframe(df_tech, use_container_width=True)
+    
+    st.download_button(
+        label="📥 Exporter la liste de l'équipe (Excel)",
+        data=convertir_df_en_excel(df_tech),
+        file_name="equipe_techniciens.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
     suppr_tech = st.selectbox(
         "Supprimer un technicien", [t["nom"] for t in techniciens]
     )
@@ -542,7 +668,16 @@ with onglets[5]:
 
   st.subheader("Planning des absences")
   if absences:
-    st.dataframe(pd.DataFrame(absences), use_container_width=True)
+    df_abs = pd.DataFrame(absences)
+    st.dataframe(df_abs, use_container_width=True)
+    
+    st.download_button(
+        label="📥 Exporter le planning des absences (Excel)",
+        data=convertir_df_en_excel(df_abs),
+        file_name="planning_absences.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
     suppr_abs = st.selectbox(
         "Supprimer une absence (par ID)", [a["id"] for a in absences]
     )
