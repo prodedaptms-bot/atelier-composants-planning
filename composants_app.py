@@ -197,6 +197,7 @@ capacite_dispo_cons_h = len(techniciens_cons) * CAPACITE_HEBDO
 
 # --- ONGLET 1 : TABLEAU DE BORD ---
 # --- ONGLET 1 : TABLEAU DE BORD ---
+# --- ONGLET 1 : TABLEAU DE BORD ---
 with onglets[0]:
     st.header("📊 Tableau de Bord & Suivi des OFs")
     st.markdown(
@@ -247,18 +248,37 @@ with onglets[0]:
 
     st.markdown("---")
 
-    # --- NOUVEAU : SYNTHÈSE DE CHARGE PAR SEMAINE ---
-    st.subheader("📅 Synthèse de la charge par Semaine")
+    # --- SYNTHÈSE DE CHARGE PAR TECHNICIEN ET PAR SEMAINE ---
+    st.subheader("👥 Suivi de la charge par Technicien & par Semaine")
     tous_ofs_synthese = ofs_se_cascade + ofs_cons_cascade
     if tous_ofs_synthese:
         df_synth = pd.DataFrame(tous_ofs_synthese)
         df_synth_actifs = df_synth[~df_synth["statut"].isin(["Terminé", "Supprimé"])]
+        
         if not df_synth_actifs.empty and "semaine_concernee" in df_synth_actifs.columns:
-            charge_par_semaine = df_synth_actifs.groupby("semaine_concernee")["temps_total_estime_h"].sum().reset_index()
-            charge_par_semaine.columns = ["Semaine", "Charge Totale (h)"]
-            st.dataframe(charge_par_semaine, use_container_width=True)
+            # Remplacement des valeurs vides ou non assignées pour la lisibilité
+            df_synth_actifs["assigne"] = df_synth_actifs["assigne"].fillna("Non assigné")
+            
+            # Création d'un tableau croisé (pivot table) : Lignes = Techniciens, Colonnes = Semaines
+            pivot_charge = df_synth_actifs.pivot_table(
+                index="assigne",
+                columns="semaine_concernee",
+                values="temps_total_estime_h",
+                aggfunc="sum",
+                fill_value=0.0
+            )
+            
+            st.dataframe(pivot_charge, use_container_width=True)
+            
+            st.download_button(
+                label="📥 Exporter la charge par technicien (CSV)",
+                data=convertir_df_en_csv(pivot_charge.reset_index()),
+                file_name="charge_par_technicien_semaine.csv",
+                mime="text/csv",
+                key="exp_charge_tech"
+            )
         else:
-            st.info("Aucune charge active à répartir par semaine.")
+            st.info("Aucune charge active à ventiler.")
     
     st.markdown("---")
 
