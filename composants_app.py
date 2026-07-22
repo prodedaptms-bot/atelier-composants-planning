@@ -196,6 +196,7 @@ capacite_dispo_cons_h = len(techniciens_cons) * CAPACITE_HEBDO
 
 
 # --- ONGLET 1 : TABLEAU DE BORD ---
+# --- ONGLET 1 : TABLEAU DE BORD ---
 with onglets[0]:
     st.header("📊 Tableau de Bord & Suivi des OFs")
     st.markdown(
@@ -246,6 +247,21 @@ with onglets[0]:
 
     st.markdown("---")
 
+    # --- NOUVEAU : SYNTHÈSE DE CHARGE PAR SEMAINE ---
+    st.subheader("📅 Synthèse de la charge par Semaine")
+    tous_ofs_synthese = ofs_se_cascade + ofs_cons_cascade
+    if tous_ofs_synthese:
+        df_synth = pd.DataFrame(tous_ofs_synthese)
+        df_synth_actifs = df_synth[~df_synth["statut"].isin(["Terminé", "Supprimé"])]
+        if not df_synth_actifs.empty and "semaine_concernee" in df_synth_actifs.columns:
+            charge_par_semaine = df_synth_actifs.groupby("semaine_concernee")["temps_total_estime_h"].sum().reset_index()
+            charge_par_semaine.columns = ["Semaine", "Charge Totale (h)"]
+            st.dataframe(charge_par_semaine, use_container_width=True)
+        else:
+            st.info("Aucune charge active à répartir par semaine.")
+    
+    st.markdown("---")
+
     st.subheader("🛠️ Suivi détaillé des OFs Sous-ensembles (avec Cascade)")
     if ofs_se_cascade:
         df_dashboard_se = pd.DataFrame(ofs_se_cascade)
@@ -277,7 +293,6 @@ with onglets[0]:
         )
     else:
         st.info("Aucun OF Consommable enregistré.")
-
 
 # --- ONGLET 2 : CRÉATION SOUS-ENSEMBLES ---
 with onglets[1]:
