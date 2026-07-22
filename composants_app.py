@@ -203,6 +203,7 @@ capacite_dispo_cons_h = len(techniciens_cons) * CAPACITE_HEBDO
 # --- ONGLET 1 : TABLEAU DE BORD ---
 # --- ONGLET 1 : TABLEAU DE BORD ---
 # --- ONGLET 1 : TABLEAU DE BORD ---
+# --- ONGLET 1 : TABLEAU DE BORD ---
 with onglets[0]:
     st.header("📊 Tableau de Bord & Suivi des OFs")
     st.markdown(
@@ -253,46 +254,98 @@ with onglets[0]:
 
     st.markdown("---")
 
-    # --- SYNTHÈSE DE CHARGE PAR TECHNICIEN ET PAR SEMAINE (Format clair & Colonnes larges) ---
-    st.subheader("👥 Suivi détaillé de la charge par Technicien et par Semaine")
+    # --- SYNTHÈSE DE CHARGE VENTILÉE PAR SEMAINE (Répartition au prorata des jours ouverts) ---
+    st.subheader("👥 Suivi détaillé de la charge par Technicien et par Semaine (Ventilé)")
     tous_ofs_synthese = ofs_se_cascade + ofs_cons_cascade
     
     if tous_ofs_synthese:
         df_synth = pd.DataFrame(tous_ofs_synthese)
         df_synth_actifs = df_synth[~df_synth["statut"].isin(["Terminé", "Supprimé"])]
         
-        if not df_synth_actifs.empty and "semaine_concernee" in df_synth_actifs.columns:
-            df_synth_actifs["assigne"] = df_synth_actifs["assigne"].fillna("Non assigné")
+        if not df_synth_actifs.empty and "date_debut_cascade" in df_synth_actifs.columns:
+            lignes_ventilees = []
             
-            # Agrégation par Technicien et par Semaine
-            df_charge_tech_sem = (
-                df_synth_actifs.groupby(["assigne", "semaine_concernee"])["temps_total_estime_h"]
-                .sum()
-                .reset_index()
-            )
-            df_charge_tech_sem.columns = ["Technicien", "Semaine", "Charge Totale (h)"]
+            for _, row in df_synth_actifs.iterrows():
+                tech = row.get("assigne", "Non assigné")
+                if not tech or tech == "Nan":
+                    tech = "Non assigné"
+                
+                temps_total = row.get("temps_total_estime_h", 0.0)
+                d_deb_str = row.get("date_debut_cascade")
+                d_fin_str = row.get("date_fin_cascade")
+                
+                if not d_deb_str or not d_fin_str or temps_total <= 0:
+                    continue
+                
+                try:
+                    d_curr = datetime.strptime(str(d_deb_str)[:10], "%Y-%m-%d").date()
+                    d_fin = datetime.strptime(str(d_fin_str)[:10], "%Y-%m-%d").date()
+                except:
+                    continue
+                
+                # 1. Identifier tous les jours ouverts de la tâche
+                jours_tache = []
+                technicien_absences = abs_par_tech.get(tech, set()) if 'abs_par_tech' in locals() else set()
+                
+                curr = d_curr
+                securite = 0
+                while curr <= d_fin and securite < 365:
+                    if curr.weekday() < 5 and curr.strftime("%Y-%m-%d") not in technicien_absences:
+                        jours_tache.append(curr)
+                    curr += timedelta(days=1)
+                    securite += 1
+                
+                nb_jours_total = len(jours_tache)
+                if nb_jours_total > 0:
+                    heures_par_jour = temps_total / nb_jours_total
+                    
+                    # 2. Regrouper par semaine calendrier
+                    semaines_repartition = {}
+                    for j in jours_tache:
+                        sem_debut = j - timedelta(days=j.weekday())
+                        sem_fin = sem_debut + timedelta(days=4)
+                        lib_semaine = f"S{sem_debut.isocalendar()[1]} ({sem_debut.strftime('%d/%m')} au {sem_fin.strftime('%d/%m')})"
+                        semaines_repartition[lib_semaine] = semaines_repartition.get(lib_semaine, 0.0) + heures_par_jour
+                    
+                    for sem, h_valeur in semaines_repartition.items():
+                        lignes_ventilees.append({
+                            "Technicien": tech,
+                            "Semaine": sem,
+                            "Charge Totale (h)": h_valeur
+                        })
+                else:
+                    lignes_ventilees.append({
+                        "Technicien": tech,
+                        "Semaine": row.get("semaine_concernee", "Non planifié"),
+                        "Charge Totale (h)": temps_total
+                    })
             
-            # Utilisation de column_config pour garantir une largeur de colonne suffisante pour les prénoms
-            st.dataframe(
-                df_charge_tech_sem,
-                use_container_width=True,
-                hide_index=True,
-                column_config={
-                    "Technicien": st.column_config.TextColumn("Technicien", width="medium"),
-                    "Semaine": st.column_config.TextColumn("Semaine", width="medium"),
-                    "Charge Totale (h)": st.column_config.NumberColumn("Charge Totale (h)", format="%.1f h")
-                }
-            )
-            
-            st.download_button(
-                label="📥 Exporter la charge par technicien et semaine (CSV)",
-                data=convertir_df_en_csv(df_charge_tech_sem),
-                file_name="charge_technicien_semaine.csv",
-                mime="text/csv",
-                key="exp_charge_tech_sem"
-            )
+            if lignes_ventilees:
+                df_ventilee = pd.DataFrame(lignes_ventilees)
+                df_charge_tech_sem = df_ventilee.groupby(["Technicien", "Semaine"])["Charge Totale (h)"].sum().reset_index()
+                
+                st.dataframe(
+                    df_charge_tech_sem,
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config={
+                        "Technicien": st.column_config.TextColumn("Technicien", width="medium"),
+                        "Semaine": st.column_config.TextColumn("Semaine", width="medium"),
+                        "Charge Totale (h)": st.column_config.NumberColumn("Charge Totale (h)", format="%.1f h")
+                    }
+                )
+                
+                st.download_button(
+                    label="📥 Exporter la charge ventilée par technicien et semaine (CSV)",
+                    data=convertir_df_en_csv(df_charge_tech_sem),
+                    file_name="charge_ventilee_technicien_semaine.csv",
+                    mime="text/csv",
+                    key="exp_charge_tech_sem_vent"
+                )
+            else:
+                st.info("Aucune charge à ventiler.")
         else:
-            st.info("Aucune charge active à ventiler.")
+            st.info("Aucune donnée de date de cascade disponible.")
     
     st.markdown("---")
 
