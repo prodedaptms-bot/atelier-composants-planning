@@ -15,6 +15,8 @@ def charger_donnees():
       "sous_ensembles": [],
       "consommables": [],
       "planification_se": [],
+      "techniciens": [],
+      "absences": [],
   }
 
 
@@ -24,7 +26,7 @@ def sauvegarder_donnees(data):
 
 
 st.set_page_config(
-    page_title="Gestion & Planification - Sous-ensembles & Consommables",
+    page_title="Gestion & Planification - Atelier",
     layout="wide",
 )
 
@@ -33,21 +35,24 @@ data = charger_donnees()
 st.title("🧩 Pilotage & Planification - Sous-ensembles & Consommables")
 st.markdown("---")
 
-# Navigation principale
+# Navigation principale avec les nouveaux onglets
 onglets = st.tabs([
     "📊 Tableau de Bord",
     "⚙️ Création Sous-ensembles",
     "📦 Suivi des Consommables",
     "📅 Planification de Production",
+    "👥 Équipe",
+    "🌴 Congés & Absences",
 ])
 
 # --- ONGLET 1 : TABLEAU DE BORD ---
 with onglets[0]:
   st.header("Indicateurs Clés")
 
-  col1, col2, col3 = st.columns(3)
+  col1, col2, col3, col4 = st.columns(4)
   nb_se = len(data.get("sous_ensembles", []))
   nb_cons = len(data.get("consommables", []))
+  nb_tech = len(data.get("techniciens", []))
 
   alertes_se = sum(
       1
@@ -60,19 +65,10 @@ with onglets[0]:
       if c["stock_actuel"] <= c["seuil_alerte"]
   )
 
-  col1.metric(
-      "Sous-ensembles référencés",
-      nb_se,
-      delta=f"-{alertes_se} en alerte" if alertes_se > 0 else "Stocks OK",
-      delta_color="inverse" if alertes_se > 0 else "normal",
-  )
-  col2.metric(
-      "Consommables suivis",
-      nb_cons,
-      delta=f"-{alertes_cons} critiques" if alertes_cons > 0 else "Stocks OK",
-      delta_color="inverse" if alertes_cons > 0 else "normal",
-  )
-  col3.metric("Total alertes actives", alertes_se + alertes_cons)
+  col1.metric("Sous-ensembles", nb_se, delta=f"-{alertes_se} en alerte" if alertes_se > 0 else "OK", delta_color="inverse" if alertes_se > 0 else "normal")
+  col2.metric("Consommables", nb_cons, delta=f"-{alertes_cons} critiques" if alertes_cons > 0 else "OK", delta_color="inverse" if alertes_cons > 0 else "normal")
+  col3.metric("Opérateurs actifs", nb_tech)
+  col4.metric("Total alertes", alertes_se + alertes_cons)
 
   st.subheader("⚠️ Articles nécessitant une attention immédiate")
 
@@ -102,10 +98,6 @@ with onglets[0]:
 # --- ONGLET 2 : CRÉATION SOUS-ENSEMBLES ---
 with onglets[1]:
   st.header("Nomenclature et Création des Sous-ensembles")
-  st.markdown(
-      "Définissez ici les sous-ensembles (pré-montages) ainsi que leur temps de"
-      " fabrication unitaire associé."
-  )
 
   with st.form("form_se"):
     c1, c2 = st.columns(2)
@@ -190,6 +182,7 @@ with onglets[3]:
   st.header("📅 Planification des Lancements de Sous-ensembles")
   
   liste_se = data.get("sous_ensembles", [])
+  liste_tech = [t["nom"] for t in data.get("techniciens", [])]
   
   if not liste_se:
     st.warning("Veuillez d'abord créer au moins un sous-ensemble dans l'onglet 'Création Sous-ensembles'.")
@@ -197,9 +190,7 @@ with onglets[3]:
     with st.form("form_planification"):
       st.subheader("Lancer un ordre de fabrication")
       
-      # Création d'un dictionnaire de correspondance Nom -> Objet pour récupérer facilement les infos
       options_se = {f"{se['nom']} (Équipement: {se['equipement_lie']} - {se['temps_fabrication']}h unit.)": se for se in liste_se}
-      
       choix_se_cle = st.selectbox("Sélectionner le sous-ensemble à fabriquer", list(options_se.keys()))
       
       c1, c2 = st.columns(2)
@@ -208,7 +199,7 @@ with onglets[3]:
         date_lancement = st.date_input("Date de lancement souhaitée", value=datetime.today())
       with c2:
         priorite = st.selectbox("Niveau de priorité", ["Normale", "Haute", "Urgente"])
-        assigne_a = st.text_input("Opérateur / Assigné à (Optionnel)")
+        assigne_a = st.selectbox("Opérateur assigné", ["Non assigné"] + liste_tech)
 
       btn_planifier = st.form_submit_button("Planifier la production")
       
@@ -223,13 +214,13 @@ with onglets[3]:
             "temps_total_estime_h": temps_total,
             "date_lancement": str(date_lancement),
             "priorite": priorite,
-            "assigne": assigne_a if assigne_a else "Non assigné",
+            "assigne": assigne_a,
             "statut": "Planifié"
         }
         
         data.setdefault("planification_se", []).append(nouveau_planning)
         sauvegarder_donnees(data)
-        st.success(f"Ordre de fabrication planifié pour {quantite_a_fabriquer}x '{se_selectionne['nom']}' ({temps_total}h de charge estimée).")
+        st.success(f"Ordre de fabrication planifié pour {quantite_a_fabriquer}x '{se_selectionne['nom']}' ({temps_total}h de charge).")
         st.rerun()
 
   st.subheader("🛠️ Ordres de fabrication planifiés")
@@ -237,4 +228,89 @@ with onglets[3]:
   if plannings:
     st.dataframe(pd.DataFrame(plannings), use_container_width=True)
   else:
-    st.info("Aucune planification de sous-ensemble enregistrée pour le moment.")
+    st.info("Aucune planification enregistrée.")
+
+# --- ONGLET 5 : ÉQUIPE ---
+with onglets[4]:
+  st.header("👥 Gestion des Opérateurs")
+
+  with st.form("form_ajout_ tech"):
+    c1, c2 = st.columns(2)
+    with c1:
+      nom_tech = st.text_input("Nom et Prénom de l'opérateur")
+    with c2:
+      role_tech = st.selectbox("Rôle / Qualification", ["Opérateur Production", "Monteur Assembleur", "Responsable d'Atelier", "Intérimaire"])
+
+    btn_ajout_tech = st.form_submit_button("Ajouter l'opérateur")
+    if btn_ajout_tech and nom_tech:
+      nouveau_tech = {
+          "id": f"TECH-{len(data.get('techniciens', [])) + 1:03d}",
+          "nom": nom_tech,
+          "role": role_tech,
+      }
+      data.setdefault("techniciens", []).append(nouveau_tech)
+      sauvegarder_donnees(data)
+      st.success(f"Opérateur '{nom_tech}' ajouté.")
+      st.rerun()
+
+  st.subheader("Liste des opérateurs de l'atelier")
+  techniciens = data.get("techniciens", [])
+  if techniciens:
+    df_tech = pd.DataFrame(techniciens)
+    st.dataframe(df_tech, use_container_width=True)
+
+    # Section suppression
+    suppr_tech = st.selectbox("Sélectionner un opérateur à supprimer", [t["nom"] for t in techniciens])
+    if st.button("Supprimer l'opérateur sélectionné"):
+      data["techniciens"] = [t for t in techniciens if t["nom"] != suppr_tech]
+      sauvegarder_donnees(data)
+      st.success(f"Opérateur '{suppr_tech}' supprimé.")
+      st.rerun()
+  else:
+    st.info("Aucun opérateur enregistré.")
+
+# --- ONGLET 6 : CONGÉS & ABSENCES ---
+with onglets[5]:
+  st.header("🌴 Gestion des Congés & Absences")
+
+  techniciens = data.get("techniciens", [])
+  if not techniciens:
+    st.warning("Veuillez d'abord enregistrer au moins un opérateur dans l'onglet 'Équipe'.")
+  else:
+    with st.form("form_absence"):
+      c1, c2 = st.columns(2)
+      with c1:
+        op_absence = st.selectbox("Opérateur", [t["nom"] for t in techniciens])
+        motif_absence = st.selectbox("Motif", ["Congés Payés", "RTT", "Maladie", "Formation", "Autre"])
+      with c2:
+        date_debut = st.date_input("Date de début", value=datetime.today())
+        date_fin = st.date_input("Date de fin", value=datetime.today() + timedelta(days=1))
+
+      btn_absence = st.form_submit_button("Enregistrer l'absence")
+      if btn_absence:
+        nouvelle_absence = {
+            "id": f"ABS-{len(data.get('absences', [])) + 1:03d}",
+            "operateur": op_absence,
+            "motif": motif_absence,
+            "date_debut": str(date_debut),
+            "date_fin": str(date_fin),
+        }
+        data.setdefault("absences", []).append(nouvelle_absence)
+        sauvegarder_donnees(data)
+        st.success(f"Absence enregistrée pour {op_absence}.")
+        st.rerun()
+
+  st.subheader("Planning des absences enregistrées")
+  absences = data.get("absences", [])
+  if absences:
+    df_abs = pd.DataFrame(absences)
+    st.dataframe(df_abs, use_container_width=True)
+
+    suppr_abs = st.selectbox("Sélectionner une absence à supprimer (par ID)", [a["id"] for a in absences])
+    if st.button("Supprimer l'absence sélectionnée"):
+      data["absences"] = [a for a in absences if a["id"] != suppr_abs]
+      sauvegarder_donnees(data)
+      st.success("Absence supprimée.")
+      st.rerun()
+  else:
+    st.info("Aucune absence enregistrée.")
