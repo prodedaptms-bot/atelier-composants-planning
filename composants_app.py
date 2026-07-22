@@ -356,7 +356,7 @@ with onglets[3]:
     else:
       with st.form("form_plan_se"):
         options_se = {
-            f"{se['nom']} ({se['temps_fabrication']}h unit.)": se
+            f"{se['nom']} ({se.get('temps_fabrication', 1.0)}h unit.)": se
             for se in liste_se
         }
         choix_se_cle = st.selectbox(
@@ -379,7 +379,7 @@ with onglets[3]:
 
         if st.form_submit_button("Planifier le sous-ensemble"):
           se_sel = options_se[choix_se_cle]
-          t_tot = se_sel["temps_fabrication"] * qte_se
+          t_tot = se_sel.get("temps_fabrication", 1.0) * qte_se
           nouveau_p = {
               "id_plan": f"PLAN-SE-{len(plannings_se) + 1:03d}",
               "sous_ensemble": se_sel["nom"],
@@ -459,7 +459,7 @@ with onglets[3]:
     else:
       with st.form("form_plan_cons"):
         options_c = {
-            f"{c['nom']} ({c['temps_fabrication']}h unit.)": c
+            f"{c['nom']} ({c.get('temps_fabrication', 1.0)}h unit.)": c
             for c in liste_cons
         }
         choix_c_cle = st.selectbox(
@@ -484,7 +484,7 @@ with onglets[3]:
 
         if st.form_submit_button("Planifier la fabrication"):
           c_sel = options_c[choix_c_cle]
-          t_tot_c = c_sel["temps_fabrication"] * qte_c
+          t_tot_c = c_sel.get("temps_fabrication", 1.0) * qte_c
           nouveau_pc = {
               "id_plan": f"PLAN-CONS-{len(plannings_cons) + 1:03d}",
               "consommable": c_sel["nom"],
