@@ -6,7 +6,9 @@ import streamlit as st
 
 DATA_FILE = "donnees_composants.json"
 CAPACITE_HEBDO = 35.0
-HEURES_JOUR_DEFAUT = 7.0  # Capacité journalière effective par technicien
+HEURES_JOUR_DEFAUT = (
+    7.0  # Capacité journalière effective par technicien
+)
 
 
 def charger_donnees():
@@ -31,7 +33,9 @@ def sauvegarder_donnees(data):
 
 
 def convertir_df_en_csv(df):
-    return df.to_csv(index=False, sep=";", encoding="utf-8-sig").encode("utf-8-sig")
+    return df.to_csv(index=False, sep=";", encoding="utf-8-sig").encode(
+        "utf-8-sig"
+    )
 
 
 def calculer_dates_cascade(
@@ -72,7 +76,10 @@ def calculer_dates_cascade(
 
         securite = 0
         while heures_restantes > 0 and securite < 365:
-            while curr_date.weekday() >= 5 or curr_date.strftime("%Y-%m-%d") in technicien_absences:
+            while (
+                curr_date.weekday() >= 5
+                or curr_date.strftime("%Y-%m-%d") in technicien_absences
+            ):
                 curr_date += timedelta(days=1)
 
             capacite_jour = HEURES_JOUR_DEFAUT
@@ -100,34 +107,45 @@ def calculer_dates_cascade(
 
         date_dispo_courante = date_reference_debut
 
-        for p in ops_tries if 'ops_tries' in locals() else ofs_tries: # Boucle propre sur les OFs triés
-            d_souhaitee_str = p.get("date_lancement", str(date_reference_debut))
+        for p in ofs_tries:
+            d_souhaitee_str = p.get(
+                "date_lancement", str(date_reference_debut)
+            )
             try:
-                d_souhaitee = datetime.strptime(d_souhaitee_str, "%Y-%m-%d").date()
+                d_souhaitee = datetime.strptime(
+                    d_souhaitee_str, "%Y-%m-%d"
+                ).date()
             except:
                 d_souhaitee = date_reference_debut
 
-            # Le début réel prend en compte la disponibilité du tech MAIS AUSSI et surtout la date de lancement souhaitée
             d_debut_reel = max(d_souhaitee, date_dispo_courante)
 
             technicien_absences = abs_par_tech.get(tech, set())
-            while d_debut_reel.weekday() >= 5 or d_debut_reel.strftime("%Y-%m-%d") in technicien_absences:
+            while (
+                d_debut_reel.weekday() >= 5
+                or d_debut_reel.strftime("%Y-%m-%d") in technicien_absences
+            ):
                 d_debut_reel += timedelta(days=1)
 
             temps_tot = p.get("temps_total_estime_h", 0.0)
             d_fin_reel = ajouter_jours_ouvres(d_debut_reel, temps_tot, tech)
 
-            semaine_debut = d_debut_reel - timedelta(days=d_debut_reel.weekday())
+            semaine_debut = d_debut_reel - timedelta(
+                days=d_debut_reel.weekday()
+            )
             semaine_fin = semaine_debut + timedelta(days=4)
 
             p_maj = p.copy()
             p_maj["date_debut_cascade"] = str(d_debut_reel)
             p_maj["date_fin_cascade"] = str(d_fin_reel)
-            p_maj["semaine_concernee"] = f"S{semaine_debut.isocalendar()[1]} ({semaine_debut.strftime('%d/%m')} au {semaine_fin.strftime('%d/%m')})"
+            p_maj[
+                "semaine_concernee"
+            ] = f"S{semaine_debut.isocalendar()[1]} ({semaine_debut.strftime('%d/%m')} au {semaine_fin.strftime('%d/%m')})"
             planning_ordonnance.append(p_maj)
 
-            # La disponibilité pour l'OF suivant est reportée à la fin de celui-ci (ou reste à la date souhaitée si l'OF est planifié plus tard)
-            date_dispo_courante = max(date_dispo_courante, d_fin_reel + timedelta(days=1))
+            date_dispo_courante = max(
+                date_dispo_courante, d_fin_reel + timedelta(days=1)
+            )
 
     for p in ofs_non_assignes:
         p_maj = p.copy()
@@ -138,6 +156,7 @@ def calculer_dates_cascade(
 
     return planning_ordonnance
 
+
 st.set_page_config(
     page_title="Planification - Atelier Sous-ensembles & Consommables",
     layout="wide",
@@ -145,13 +164,10 @@ st.set_page_config(
 
 data = charger_donnees()
 
-# --- BANDEAU IMAGE TOUT EN HAUT ---
 if os.path.exists("fond_bandeau.jpg"):
     st.image("fond_bandeau.jpg", use_container_width=True)
 else:
-    st.warning(
-        "Image 'fond_bandeau.jpg' introuvable dans le dossier du script."
-    )
+    st.warning("Image 'fond_bandeau.jpg' introuvable dans le dossier du script.")
 
 st.title("🧩 Planification Cascade & Pilotage - Atelier")
 st.markdown("---")
@@ -198,11 +214,6 @@ charge_restante_cons_h = sum(
 capacite_dispo_prod_h = len(techniciens_prod) * CAPACITE_HEBDO
 capacite_dispo_cons_h = len(techniciens_cons) * CAPACITE_HEBDO
 
-
-# --- ONGLET 1 : TABLEAU DE BORD ---
-# --- ONGLET 1 : TABLEAU DE BORD ---
-# --- ONGLET 1 : TABLEAU DE BORD ---
-# --- ONGLET 1 : TABLEAU DE BORD ---
 # --- ONGLET 1 : TABLEAU DE BORD ---
 with onglets[0]:
     st.header("📊 Tableau de Bord & Suivi des OFs")
@@ -211,13 +222,17 @@ with onglets[0]:
         f" {fin_semaine.strftime('%d/%m/%Y')}"
     )
 
-    # --- Option de conversion de quantité pour l'affichage ---
     st.markdown("### ⚙️ Options d'affichage & Conversion")
     type_conversion = st.selectbox(
         "Mode de conversion des quantités (Tableau de bord) :",
-        ["Aucune (Unités de base)", "Conversion en Lots (1 lot = 10 unités)", "Conversion en Millivis (x1000)"],
-        key="conv_dashboard"
+        [
+            "Aucune (Unités de base)",
+            "Conversion en Lots (1 lot = 10 unités)",
+            "Conversion en Millivis (x1000)",
+        ],
+        key="conv_dashboard",
     )
+
 
     def appliquer_conversion(df):
         if df.empty:
@@ -234,6 +249,7 @@ with onglets[0]:
                 df_c["quantite_convertie"] = df_c["quantite"]
                 df_c["unite_convertie"] = "Unités"
         return df_c
+
 
     c1, c2 = st.columns(2)
     with c1:
@@ -254,99 +270,146 @@ with onglets[0]:
 
     st.markdown("---")
 
-    # --- SYNTHÈSE DE CHARGE VENTILÉE PAR SEMAINE (Répartition au prorata des jours ouverts) ---
-    st.subheader("👥 Suivi détaillé de la charge par Technicien et par Semaine (Ventilé)")
+    st.subheader(
+        "👥 Suivi détaillé de la charge par Technicien et par Semaine (Ventilé)"
+    )
     tous_ofs_synthese = ofs_se_cascade + ofs_cons_cascade
-    
+
     if tous_ofs_synthese:
         df_synth = pd.DataFrame(tous_ofs_synthese)
-        df_synth_actifs = df_synth[~df_synth["statut"].isin(["Terminé", "Supprimé"])]
-        
-        if not df_synth_actifs.empty and "date_debut_cascade" in df_synth_actifs.columns:
+        df_synth_actifs = df_synth[
+            ~df_synth["statut"].isin(["Terminé", "Supprimé"])
+        ]
+
+        abs_par_tech_global = {}
+        for abs_rec in absences_prod + absences_cons:
+            tech = abs_rec.get("technicien")
+            try:
+                d_deb = datetime.strptime(
+                    abs_rec["date_debut"], "%Y-%m-%d"
+                ).date()
+                d_fin = datetime.strptime(
+                    abs_rec["date_fin"], "%Y-%m-%d"
+                ).date()
+                curr = d_deb
+                if tech not in abs_par_tech_global:
+                    abs_par_tech_global[tech] = set()
+                while curr <= d_fin:
+                    abs_par_tech_global[tech].add(curr.strftime("%Y-%m-%d"))
+                    curr += timedelta(days=1)
+            except:
+                pass
+
+        if (
+            not df_synth_actifs.empty
+            and "date_debut_cascade" in df_synth_actifs.columns
+        ):
             lignes_ventilees = []
-            
+
             for _, row in df_synth_actifs.iterrows():
                 tech = row.get("assigne", "Non assigné")
                 if not tech or tech == "Nan":
                     tech = "Non assigné"
-                
+
                 temps_total = row.get("temps_total_estime_h", 0.0)
                 d_deb_str = row.get("date_debut_cascade")
                 d_fin_str = row.get("date_fin_cascade")
-                
+
                 if not d_deb_str or not d_fin_str or temps_total <= 0:
                     continue
-                
+
                 try:
-                    d_curr = datetime.strptime(str(d_deb_str)[:10], "%Y-%m-%d").date()
-                    d_fin = datetime.strptime(str(d_fin_str)[:10], "%Y-%m-%d").date()
+                    d_curr = datetime.strptime(
+                        str(d_deb_str)[:10], "%Y-%m-%d"
+                    ).date()
+                    d_fin = datetime.strptime(
+                        str(d_fin_str)[:10], "%Y-%m-%d"
+                    ).date()
                 except:
                     continue
-                
-                # 1. Identifier tous les jours ouverts de la tâche
+
                 jours_tache = []
-                technicien_absences = abs_par_tech.get(tech, set()) if 'abs_par_tech' in locals() else set()
-                
+                technicien_absences = abs_par_tech_global.get(tech, set())
+
                 curr = d_curr
                 securite = 0
                 while curr <= d_fin and securite < 365:
-                    if curr.weekday() < 5 and curr.strftime("%Y-%m-%d") not in technicien_absences:
+                    if (
+                        curr.weekday() < 5
+                        and curr.strftime("%Y-%m-%d") not in technicien_absences
+                    ):
                         jours_tache.append(curr)
                     curr += timedelta(days=1)
                     securite += 1
-                
+
                 nb_jours_total = len(jours_tache)
                 if nb_jours_total > 0:
                     heures_par_jour = temps_total / nb_jours_total
-                    
-                    # 2. Regrouper par semaine calendrier
+
                     semaines_repartition = {}
                     for j in jours_tache:
                         sem_debut = j - timedelta(days=j.weekday())
                         sem_fin = sem_debut + timedelta(days=4)
                         lib_semaine = f"S{sem_debut.isocalendar()[1]} ({sem_debut.strftime('%d/%m')} au {sem_fin.strftime('%d/%m')})"
-                        semaines_repartition[lib_semaine] = semaines_repartition.get(lib_semaine, 0.0) + heures_par_jour
-                    
+                        semaines_repartition[lib_semaine] = (
+                            semaines_repartition.get(lib_semaine, 0.0)
+                            + heures_par_jour
+                        )
+
                     for sem, h_valeur in semaines_repartition.items():
                         lignes_ventilees.append({
                             "Technicien": tech,
                             "Semaine": sem,
-                            "Charge Totale (h)": h_valeur
+                            "Charge Totale (h)": h_valeur,
                         })
                 else:
                     lignes_ventilees.append({
                         "Technicien": tech,
-                        "Semaine": row.get("semaine_concernee", "Non planifié"),
-                        "Charge Totale (h)": temps_total
+                        "Semaine": row.get(
+                            "semaine_concernee", "Non planifié"
+                        ),
+                        "Charge Totale (h)": temps_total,
                     })
-            
+
             if lignes_ventilees:
                 df_ventilee = pd.DataFrame(lignes_ventilees)
-                df_charge_tech_sem = df_ventilee.groupby(["Technicien", "Semaine"])["Charge Totale (h)"].sum().reset_index()
-                
+                df_charge_tech_sem = (
+                    df_ventilee.groupby(["Technicien", "Semaine"])[
+                        "Charge Totale (h)"
+                    ]
+                    .sum()
+                    .reset_index()
+                )
+
                 st.dataframe(
                     df_charge_tech_sem,
                     use_container_width=True,
                     hide_index=True,
                     column_config={
-                        "Technicien": st.column_config.TextColumn("Technicien", width="medium"),
-                        "Semaine": st.column_config.TextColumn("Semaine", width="medium"),
-                        "Charge Totale (h)": st.column_config.NumberColumn("Charge Totale (h)", format="%.1f h")
-                    }
+                        "Technicien": st.column_config.TextColumn(
+                            "Technicien", width="medium"
+                        ),
+                        "Semaine": st.column_config.TextColumn(
+                            "Semaine", width="medium"
+                        ),
+                        "Charge Totale (h)": st.column_config.NumberColumn(
+                            "Charge Totale (h)", format="%.1f h"
+                        ),
+                    },
                 )
-                
+
                 st.download_button(
                     label="📥 Exporter la charge ventilée par technicien et semaine (CSV)",
                     data=convertir_df_en_csv(df_charge_tech_sem),
                     file_name="charge_ventilee_technicien_semaine.csv",
                     mime="text/csv",
-                    key="exp_charge_tech_sem_vent"
+                    key="exp_charge_tech_sem_vent",
                 )
             else:
                 st.info("Aucune charge à ventiler.")
         else:
             st.info("Aucune donnée de date de cascade disponible.")
-    
+
     st.markdown("---")
 
     st.subheader("🛠️ Suivi détaillé des OFs Sous-ensembles (avec Cascade)")
@@ -384,7 +447,6 @@ with onglets[0]:
 # --- ONGLET 2 : CRÉATION SOUS-ENSEMBLES ---
 with onglets[1]:
     st.header("⚙️ Gestion & Création des Sous-ensembles")
-
     with st.form("form_creer_se"):
         st.subheader("Ajouter un nouveau modèle de Sous-ensemble")
         nom_se = st.text_input("Nom du Sous-ensemble")
@@ -435,17 +497,14 @@ with onglets[1]:
     else:
         st.info("Aucun sous-ensemble configuré pour l'instant.")
 
-
 # --- ONGLET 3 : RÉFÉRENCES CONSOMMABLES ---
 with onglets[2]:
     st.header("📦 Gestion & Références des Consommables")
-
     with st.form("form_creer_cons"):
         st.subheader("Ajouter un nouveau Consommable")
         nom_cons = st.text_input("Nom du Consommable")
         ref_cons = st.text_input("Référence / Code Consommable")
 
-        # Choix du mode de saisie du temps
         mode_saisie = st.radio(
             "Mode de calcul du temps de fabrication",
             [
@@ -522,7 +581,6 @@ with onglets[2]:
     else:
         st.info("Aucun consommable configuré pour l'instant.")
 
-
 # --- ONGLET 4 : PLANIFICATION & CASCADE ---
 with onglets[3]:
     st.header("📅 Ordonnancement en Cascade & Vues Gantt Semaine")
@@ -547,7 +605,9 @@ with onglets[3]:
                     "Sous-ensemble à fabriquer", list(options_se.keys())
                 )
                 qte_se = st.number_input("Quantité", min_value=1, value=1)
-                date_l_se = st.date_input("Date de lancement souhaitée", value=auj)
+                date_l_se = st.date_input(
+                    "Date de lancement souhaitée", value=auj
+                )
                 prio_se = st.selectbox("Priorité", ["Normale", "Haute", "Urgente"])
                 tech_se = st.selectbox(
                     "Assigné à (Technicien Production)",
@@ -590,7 +650,9 @@ with onglets[3]:
                 choix_c_cle = st.selectbox(
                     "Consommable à fabriquer", list(options_c.keys())
                 )
-                qte_c = st.number_input("Quantité", min_value=1, value=1, key="qc")
+                qte_c = st.number_input(
+                    "Quantité", min_value=1, value=1, key="qc"
+                )
                 date_l_c = st.date_input(
                     "Date de lancement souhaitée", value=auj, key="dlc"
                 )
@@ -699,7 +761,9 @@ with onglets[3]:
         légende_markdown = " | ".join([
             f"{couleur} **{tech}**" for tech, couleur in tech_couleur_map.items()
         ])
-        st.markdown(légende_markdown if légende_markdown else "Aucun technicien.")
+        st.markdown(
+            légende_markdown if légende_markdown else "Aucun technicien."
+        )
 
         jours_semaine = [debut_semaine + timedelta(days=i) for i in range(5)]
         tous_ofs_cascade = ofs_se_cascade + ofs_cons_cascade
@@ -717,7 +781,9 @@ with onglets[3]:
                 <= j_str
                 <= x.get("date_fin_cascade")
             ]
-            ligne_na[j.strftime("%A %d/%m")] = " | ".join(matches) if matches else ""
+            ligne_na[j.strftime("%A %d/%m")] = (
+                " | ".join(matches) if matches else ""
+            )
         grille_gantt_couleur.append(ligne_na)
 
         for tech in tous_techs:
@@ -749,7 +815,6 @@ with onglets[3]:
             mime="text/csv",
         )
 
-
 # --- ONGLET 5 : ÉQUIPE ---
 with onglets[4]:
     st.header("👥 Gestion des Équipes")
@@ -759,9 +824,10 @@ with onglets[4]:
         with st.form("form_tp"):
             ntp = st.text_input("Nom Tech Prod")
             if st.form_submit_button("Ajouter") and ntp:
-                techniciens_prod.append(
-                    {"id": f"TECH-P-{len(techniciens_prod)+1:03d}", "nom": ntp}
-                )
+                techniciens_prod.append({
+                    "id": f"TECH-P-{len(techniciens_prod)+1:03d}",
+                    "nom": ntp,
+                })
                 data["techniciens_prod"] = techniciens_prod
                 sauvegarder_donnees(data)
                 st.rerun()
@@ -772,27 +838,30 @@ with onglets[4]:
         with st.form("form_tc"):
             ntc = st.text_input("Nom Tech Cons.")
             if st.form_submit_button("Ajouter") and ntc:
-                techniciens_cons.append(
-                    {"id": f"TECH-C-{len(techniciens_cons)+1:03d}", "nom": ntc}
-                )
+                techniciens_cons.append({
+                    "id": f"TECH-C-{len(techniciens_cons)+1:03d}",
+                    "nom": ntc,
+                })
                 data["techniciens_cons"] = techniciens_cons
                 sauvegarder_donnees(data)
                 st.rerun()
         if techniciens_cons:
-            st.dataframe(pd.DataFrame(techniciens_cons), use_container_width=True)
-
+            st.dataframe(
+                pd.DataFrame(techniciens_cons), use_container_width=True
+            )
 
 # --- ONGLET 6 : CONGÉS & ABSENCES ---
 with onglets[5]:
     st.header("🌴 Congés & Absences")
     c_ab1, c_ab2 = st.columns(2)
-    
-    # --- 1. ABSENCES PROD ---
+
     with c_ab1:
         st.subheader("Absences Prod")
         if techniciens_prod:
             with st.form("absp"):
-                t_p = st.selectbox("Tech", [t["nom"] for t in techniciens_prod])
+                t_p = st.selectbox(
+                    "Tech", [t["nom"] for t in techniciens_prod]
+                )
                 m_p = st.selectbox(
                     "Motif", ["Congés Payés", "RTT", "Maladie", "Formation"]
                 )
@@ -810,82 +879,89 @@ with onglets[5]:
                     sauvegarder_donnees(data)
                     st.success("Absence enregistrée.")
                     st.rerun()
-            if absences_prod:
-                st.dataframe(pd.DataFrame(absences_prod), use_container_width=True)
+        if absences_prod:
+            st.dataframe(pd.DataFrame(absences_prod), use_container_width=True)
+            id_suppr_absp = st.selectbox(
+                "ID Absence Prod à supprimer",
+                [a["id"] for a in absences_prod],
+                key="del_absp",
+            )
+            if st.button("Supprimer absence Prod"):
+                data["absences_prod"] = [
+                    a for a in absences_prod if a["id"] != id_suppr_absp
+                ]
+                sauvegarder_donnees(data)
+                st.rerun()
 
-    # --- 2. ABSENCES CONSOMMABLES ---
     with c_ab2:
         st.subheader("Absences Consommables")
-        # Assure-toi d'avoir une liste 'consommables' ou adapte la variable selon ton code
-        consommables = data.get("consommables", []) 
-        absences_conso = data.get("absences_conso", [])
-        
-        if consommables:
-            with st.form("absco"):
-                t_c = st.selectbox("Consommable / Intérimaire", [c["nom"] for c in consommables], key="abs_c_nom")
+        if techniciens_cons:
+            with st.form("absc"):
+                t_c = st.selectbox(
+                    "Tech", [t["nom"] for t in techniciens_cons]
+                )
                 m_c = st.selectbox(
-                    "Motif", ["Congés Payés", "Fin de contrat / Interruption", "Maladie", "Absence"], key="abs_c_motif"
+                    "Motif",
+                    ["Congés Payés", "RTT", "Maladie", "Formation"],
+                    key="mc",
                 )
                 db_c = st.date_input("Début", auj, key="ab_db_c")
                 df_c = st.date_input("Fin", auj, key="ab_df_c")
-                if st.form_submit_button("Enregistrer absence Consommable"):
-                    absences_conso.append({
-                        "id": f"ABS-C-{len(absences_conso)+1:03d}",
-                        "consommable": t_c,
+                if st.form_submit_button("Enregistrer absence Cons."):
+                    absences_cons.append({
+                        "id": f"ABS-C-{len(absences_cons)+1:03d}",
+                        "technicien": t_c,
                         "motif": m_c,
                         "date_debut": str(db_c),
                         "date_fin": str(df_c),
                     })
-                    data["absences_conso"] = absences_conso
+                    data["absences_cons"] = absences_cons
                     sauvegarder_donnees(data)
-                    st.success("Absence consommable enregistrée.")
+                    st.success("Absence enregistrée.")
                     st.rerun()
-            if absences_conso:
-                st.dataframe(pd.DataFrame(absences_conso), use_container_width=True)
-        else:
-            st.info("Aucun consommable enregistré dans la base pour le moment.")
-# --- ONGLET 7 : SAUVEGARDE & DONNÉES (EXPORT / IMPORT) ---
+        if absences_cons:
+            st.dataframe(pd.DataFrame(absences_cons), use_container_width=True)
+            id_suppr_absc = st.selectbox(
+                "ID Absence Cons. à supprimer",
+                [a["id"] for a in absences_cons],
+                key="del_absc",
+            )
+            if st.button("Supprimer absence Cons."):
+                data["absences_cons"] = [
+                    a for a in absences_cons if a["id"] != id_suppr_absc
+                ]
+                sauvegarder_donnees(data)
+                st.rerun()
+
+# --- ONGLET 7 : SAUVEGARDE & DONNÉES ---
 with onglets[6]:
-    st.header("💾 Gestion de la Base de Données (Sauvegarde & Import)")
+    st.header("💾 Gestion des Données & Fichiers")
     st.markdown(
-        "Vous pouvez ici sauvegarder l'intégralité de vos données (catalogues,"
-        " plannings, équipes) sous forme de fichier JSON, ou restaurer une"
-        " sauvegarde précédente."
+        "Vous pouvez exporter ou réimporter l'intégralité des données de"
+        " l'atelier (catalogue, plannings, techniciens, absences)."
     )
 
-    col_sav1, col_sav2 = st.columns(2)
+    if os.path.exists(DATA_FILE):
+        with open(DATA_FILE, "r", encoding="utf-8") as f:
+            contenu_json = f.read()
 
-    with col_sav1:
-        st.subheader("📤 Sauvegarder / Exporter")
-        st.markdown("Télécharger la base de données active sur votre poste.")
-        json_str = json.dumps(data, ensure_ascii=False, indent=4)
         st.download_button(
-            label="📥 Télécharger le fichier de sauvegarde (.json)",
-            data=json_str,
-            file_name=f"sauvegarde_atelier_{auj.strftime('%Y-%m-%d')}.json",
+            label="📥 Télécharger la base de données complète (JSON)",
+            data=contenu_json,
+            file_name="donnees_composants.json",
             mime="application/json",
         )
 
-    with col_sav2:
-        st.subheader("📥 Importer / Restaurer")
-        st.markdown(
-            "Remplacer les données actuelles par un fichier de sauvegarde JSON."
-        )
-        fichier_importe = st.file_uploader(
-            "Choisir un fichier de sauvegarde JSON", type=["json"]
-        )
-        if fichier_importe is not None:
-            if st.button("⚠️ Valider et restaurer cette base de données"):
-                try:
-                    donnees_chargees = json.load(fichier_importe)
-                    if isinstance(donnees_chargees, dict):
-                        sauvegarder_donnees(donnees_chargees)
-                        st.success(
-                            "Base de données importée et restaurée avec succès ! Rechargement"
-                            " en cours..."
-                        )
-                        st.rerun()
-                    else:
-                        st.error("Format de fichier invalide.")
-                except Exception as e:
-                    st.error(f"Erreur lors de l'importation du fichier : {e}")
+    st.markdown("---")
+    st.subheader("Restaurer / Importer une base de données")
+    fichier_uploade = st.file_uploader(
+        "Importer un fichier JSON de sauvegarde", type=["json"]
+    )
+    if fichier_uploade is not None:
+        try:
+            donnees_importees = json.load(fichier_uploade)
+            sauvegarder_donnees(donnees_importees)
+            st.success("Base de données restaurée avec succès !")
+            st.rerun()
+        except Exception as e:
+            st.error(f"Erreur lors de l'importation du fichier : {e}")
