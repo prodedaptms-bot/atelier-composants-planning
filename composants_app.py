@@ -237,8 +237,75 @@ with onglets[4]:
 
 # --- ONGLET 6 : PLANNING ---
 with onglets[5]:
-    st.header("🗓️ Planning")
-    st.info("Espace dédié au planning global.")
+    st.header("🗓️ Planning et Disponibilités des Ressources")
+    
+    st.markdown("Vérifiez l'impact des congés et absences en sélectionnant une date cible :")
+    
+    # Sélecteur de date pour l'analyse
+    date_selectionnee = st.date_input("Date à analyser", auj, key="date_planning_cible")
+    date_str = str(date_selectionnee)
+    
+    st.markdown("---")
+    
+    c_p_plan, c_c_plan = st.columns(2)
+    
+    # --- ANALYSE ÉQUIPE PRODUCTION ---
+    with c_p_plan:
+        st.subheader("Production")
+        if techniciens_prod:
+            # Identifier les techs de prod absents à cette date
+            absents_prod_du_jour = []
+            for ab in absences_prod:
+                if ab["date_debut"] <= date_str <= ab["date_fin"]:
+                    absents_prod_du_jour.append((ab["technicien"], ab["motif"]))
+            
+            noms_absents_p = [item[0] for item in absents_prod_du_jour]
+            
+            st.markdown(f"**Techniciens absents le {date_selectionnee.strftime('%d/%m/%Y')} :**")
+            if absents_prod_du_jour:
+                for tech, motif in absents_prod_du_jour:
+                    st.warning(f"🔴 **{tech}** ({motif})")
+            else:
+                st.success("🟢 Aucun absent ce jour-là.")
+                
+            st.markdown("**Techniciens disponibles :**")
+            dispos_p = [t for t in techniciens_prod if t["nom"] not in noms_absents_p]
+            if dispos_p:
+                for t in dispos_p:
+                    st.info(f"✔️ {t['nom']} ({t['id']})")
+            else:
+                st.error("⚠️ Aucun technicien disponible dans cette équipe à cette date.")
+        else:
+            st.info("Aucun technicien de production enregistré.")
+
+    # --- ANALYSE ÉQUIPE CONSOMMABLES ---
+    with c_c_plan:
+        st.subheader("Consommables")
+        if techniciens_cons:
+            # Identifier les techs consommables absents à cette date
+            absents_cons_du_jour = []
+            for ab in absences_cons:
+                if ab["date_debut"] <= date_str <= ab["date_fin"]:
+                    absents_cons_du_jour.append((ab["technicien"], ab["motif"]))
+            
+            noms_absents_c = [item[0] for item in absents_cons_du_jour]
+            
+            st.markdown(f"**Techniciens absents le {date_selectionnee.strftime('%d/%m/%Y')} :**")
+            if absents_cons_du_jour:
+                for tech, motif in absents_cons_du_jour:
+                    st.warning(f"🔴 **{tech}** ({motif})")
+            else:
+                st.success("🟢 Aucun absent ce jour-là.")
+                
+            st.markdown("**Techniciens disponibles :**")
+            dispos_c = [t for t in techniciens_cons if t["nom"] not in noms_absents_c]
+            if dispos_c:
+                for t in dispos_c:
+                    st.info(f"✔️ {t['nom']} ({t['id']})")
+            else:
+                st.error("⚠️ Aucun technicien disponible dans cette équipe à cette date.")
+        else:
+            st.info("Aucun technicien consommables enregistré.")
 
 # --- ONGLET 7 : SAUVEGARDE & DONNÉES ---
 with onglets[6]:
