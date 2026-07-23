@@ -1,187 +1,192 @@
-import datetime
+import os
 import pandas as pd
 import streamlit as st
 
-st.set_page_config(
-    page_title="Planification Atelier", layout="wide"
-)
+DATA_FILE = "donnees_composants_sauvegarde.json"
 
-# --- INITIALISATION DES DONNÉES ---
-if "ofs" not in st.session_state:
-    st.session_state.ofs = [
-        {
-            "id": 1,
-            "sous_ensemble": "Focal Pak A",
-            "consommable": "",
-            "quantite": 5,
-            "assigne": "Thomas",
-            "statut": "En cours",
-            "date_debut_cascade": "2026-07-20",
-            "date_fin_cascade": "2026-07-24",
-        },
-        {
-            "id": 2,
-            "sous_ensemble": "",
-            "consommable": "Câblage B",
-            "quantite": 12,
-            "assigne": "Sarah",
-            "statut": "Planifié",
-            "date_debut_cascade": "2026-07-21",
-            "date_fin_cascade": "2026-07-23",
-        },
-    ]
-
-if "techs" not in st.session_state:
-    st.session_state.techs = ["Thomas", "Sarah", "Marc", "Julie"]
-
-# --- INTERFACE PRINCIPALE ---
-st.title("🛠️ Tableau de Bord - Planification Atelier & Ligne de Production")
-
-# Navigation complète par onglets
-tab_planning, tab_saisie, tab_gestion, tab_export = st.tabs([
-    "📅 Planning & Gantt", 
-    "➕ Saisie des OFs", 
-    "⚙️ Gestion & Statuts", 
-    "📥 Export & Analyse"
-])
-
-# --- 1. VUE PLANNING & GANTT ---
-with tab_planning:
-    st.subheader("Planning de la Semaine par Technicien")
-
-    col_opt1, col_opt2 = st.columns(2)
-    with col_opt1:
-        semaine_offset = st.slider(
-            "Décalage de semaine", min_value=-2, max_value=4, value=0, key="slider_semaine"
-        )
-    with col_opt2:
-        afficher_fermes = st.checkbox("Afficher les OFs Terminés/Supprimés dans le Gantt", value=False)
-
-    aujourdhui = datetime.date.today()
-    debut_semaine = aujourdhui - datetime.timedelta(
-        days=aujourdhui.weekday()
-    ) + datetime.timedelta(weeks=semaine_offset)
-    jours_semaine = [
-        debut_semaine + datetime.timedelta(days=i) for i in range(5)
-    ]
-
-    tous_techs = st.session_state.techs
-    tous_ofs_cascade = st.session_state.ofs
-
-    tech_couleur_map = {
-        "Thomas": "🟢",
-        "Sarah": "🔵",
-        "Marc": "🟠",
-        "Julie": "🟣",
+def charger_donnees():
+    if os.path.exists(DATA_FILE):
+        import json
+        with open(DATA_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {
+        "techniciens_prod": [],
+        "techniciens_cons": [],
+        "absences_prod": [],
+        "absences_cons": []
     }
 
-    grille_gantt_couleur = []
+def sauvegarder_donnees(data):
+    import json
+    with open(DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
 
-    for tech in tous_techs:
-        couleur = tech_couleur_map.get(tech, "🔵")
-        ligne_tech = {"Technicien": f"{tech} {couleur}"}
-        for j in jours_semaine:
-            j_str = str(j)
-            
-            # Application du filtre selon la case cochée
-            if afficher_fermes:
-                matches = [
-                    f"[{x['statut'].upper()}] {x.get('sous_ensemble') or x.get('consommable')} (x{x['quantite']})"
-                    for x in tous_ofs_cascade
-                    if x.get("assigne") == tech
-                    and x.get("date_debut_cascade") <= j_str <= x.get("date_fin_cascade")
-                ]
+data = charger_donnees()
+techniciens_prod = data.get("techniciens_prod", [])
+techniciens_cons = data.get("techniciens_cons", [])
+absences_prod = data.get("absences_prod", [])
+absences_cons = data.get("absences_cons", [])
+
+auj = pd.Timestamp.today().date()
+
+st.title("Gestion de Planning et des Ressources")
+
+onglets = st.tabs([
+    "Équipe Prod", 
+    "Équipe Consommables", 
+    "Absences Prod", 
+    "Absences Consommables", 
+    "Sauvegarde & Données"
+])
+
+# --- ONGLET 1 : ÉQUIPE PROD ---
+with onglets[0]:
+    st.header("👥 Gestion de l'équipe Production")
+    
+    with st.form("ajout_tech_prod"):
+        nom_tp = st.text_input("Nom du technicien (Production)")
+        if st.form_submit_button("Ajouter le technicien"):
+            if nom_tp:
+                techniciens_prod.append({"id": f"TP-{len(techniciens_prod)+1:03d}", "nom": nom_tp})
+                data["techniciens_prod"] = techniciens_prod
+                sauvegarder_donnees(data)
+                st.success(f"Technicien {nom_tp} ajouté avec succès !")
+                st.rerun()
             else:
-                matches = [
-                    f"{x.get('sous_ensemble') or x.get('consommable')} (x{x['quantite']})"
-                    for x in tous_ofs_cascade
-                    if x.get("assigne") == tech
-                    and x.get("statut") not in ["Terminé", "Supprimé"]
-                    and x.get("date_debut_cascade") <= j_str <= x.get("date_fin_cascade")
-                ]
+                st.error("Veuillez entrer un nom.")
 
-            ligne_tech[j.strftime("%A %d/%m")] = " | ".join(matches) if matches else ""
-        grille_gantt_couleur.append(ligne_tech)
-
-    if grille_gantt_couleur:
-        df_gantt = pd.DataFrame(grille_gantt_couleur)
-        st.dataframe(df_gantt, use_container_width=True, hide_index=True)
-    else:
-        st.info("Aucun planning à afficher pour cette semaine.")
-
-# --- 2. SAISIE DES OFs ---
-with tab_saisie:
-    st.subheader("Création d'un Nouvel Ordre de Fabrication")
-    with st.form("form_nouveau_of"):
-        c1, c2 = st.columns(2)
-        with c1:
-            type_element = st.radio("Type d'élément", ["Sous-ensemble", "Consommable"])
-            if type_element == "Sous-ensemble":
-                val_sous_ensemble = st.text_input("Nom du sous-ensemble")
-                val_consommable = ""
-            else:
-                val_sous_ensemble = ""
-                val_consommable = st.text_input("Nom du consommable")
-            
-            quantite = st.number_input("Quantité", min_value=1, value=1)
-
-        with c2:
-            assigne = st.selectbox("Assigner à un technicien", st.session_state.techs)
-            date_debut = st.date_input("Date de début (Cascade)", datetime.date.today())
-            date_fin = st.date_input("Date de fin (Cascade)", datetime.date.today() + datetime.timedelta(days=2))
-
-        submitted = st.form_submit_button("Ajouter l'OF")
-        if submitted:
-            nouveau_id = max([o["id"] for o in st.session_state.ofs], default=0) + 1
-            st.session_state.ofs.append({
-                "id": nouveau_id,
-                "sous_ensemble": val_sous_ensemble,
-                "consommable": val_consommable,
-                "quantite": quantite,
-                "assigne": assigne,
-                "statut": "Planifié",
-                "date_debut_cascade": str(date_debut),
-                "date_fin_cascade": str(date_fin),
-            })
-            st.success(f"OF #{nouveau_id} ajouté avec succès !")
+    if techniciens_prod:
+        st.markdown("#### Liste des techniciens (Production)")
+        st.dataframe(pd.DataFrame(techniciens_prod), use_container_width=True)
+        
+        id_sup_tp = st.selectbox("ID à supprimer", [t["id"] for t in techniciens_prod], key="suppr_tp")
+        if st.button("Supprimer ce technicien Prod"):
+            data["techniciens_prod"] = [t for t in techniciens_prod if t["id"] != id_sup_tp]
+            sauvegarder_donnees(data)
+            st.success("Technicien supprimé.")
             st.rerun()
 
-# --- 3. GESTION & STATUTS ---
-with tab_gestion:
-    st.subheader("Gestion, Modification et Suivi des Statuts")
-    st.markdown("Passez rapidement un OF en **Terminé** ou **Supprimé** pour l'écarter automatiquement du calcul de charge de l'atelier.")
+# --- ONGLET 2 : ÉQUIPE CONSOMMABLES ---
+with onglets[1]:
+    st.header("👥 Gestion de l'équipe Consommables")
+    
+    with st.form("ajout_tech_cons"):
+        nom_tc = st.text_input("Nom du technicien (Consommables)")
+        if st.form_submit_button("Ajouter le technicien"):
+            if nom_tc:
+                techniciens_cons.append({"id": f"TC-{len(techniciens_cons)+1:03d}", "nom": nom_tc})
+                data["techniciens_cons"] = techniciens_cons
+                sauvegarder_donnees(data)
+                st.success(f"Technicien {nom_tc} ajouté avec succès !")
+                st.rerun()
+            else:
+                st.error("Veuillez entrer un nom.")
 
-    for i, of in enumerate(st.session_state.ofs):
-        titre_element = of.get('sous_ensemble') or of.get('consommable') or "Élément sans nom"
-        with st.expander(f"OF #{of['id']} - {titre_element} (Assigné : {of['assigne']} | Statut actuel : {of['statut']})"):
-            col_g, col_d = st.columns([2, 1])
-            with col_g:
-                st.write(f"**Quantité :** {of['quantite']}")
-                st.write(f"**Période :** Du {of['date_debut_cascade']} au {of['date_fin_cascade']}")
-            with col_d:
-                nouveau_statut = st.selectbox(
-                    "Modifier le statut",
-                    ["Planifié", "En cours", "Terminé", "Supprimé"],
-                    index=["Planifié", "En cours", "Terminé", "Supprimé"].index(of['statut']),
-                    key=f"select_statut_{i}"
-                )
-                if nouveau_statut != of['statut']:
-                    st.session_state.ofs[i]['statut'] = nouveau_statut
-                    st.rerun()
-
-# --- 4. EXPORT & ANALYSE ---
-with tab_export:
-    st.subheader("Exports et Données Brutes")
-    if st.session_state.ofs:
-        df_export = pd.DataFrame(st.session_state.ofs)
-        st.dataframe(df_export, use_container_width=True)
+    if techniciens_cons:
+        st.markdown("#### Liste des techniciens (Consommables)")
+        st.dataframe(pd.DataFrame(techniciens_cons), use_container_width=True)
         
-        csv = df_export.to_csv(index=False).encode('utf-8')
+        id_sup_tc = st.selectbox("ID à supprimer", [t["id"] for t in techniciens_cons], key="suppr_tc")
+        if st.button("Supprimer ce technicien Consommables"):
+            data["techniciens_cons"] = [t for t in techniciens_cons if t["id"] != id_sup_tc]
+            sauvegarder_donnees(data)
+            st.success("Technicien supprimé.")
+            st.rerun()
+
+# --- ONGLET 3 : ABSENCES PROD ---
+with onglets[2]:
+    st.subheader("Absences Production")
+    if techniciens_prod:
+        with st.form("absp"):
+            t_p = st.selectbox("Tech", [t["nom"] for t in techniciens_prod], key="ab_tp")
+            m_p = st.selectbox("Motif", ["Congés Payés", "RTT", "Maladie", "Formation"], key="ab_mp")
+            db_p = st.date_input("Début", auj, key="ab_dbp")
+            df_p = st.date_input("Fin", auj, key="ab_dfp")
+            if st.form_submit_button("Enregistrer absence Prod."):
+                absences_prod.append({
+                    "id": f"ABS-P-{len(absences_prod)+1:03d}",
+                    "technicien": t_p,
+                    "motif": m_p,
+                    "date_debut": str(db_p),
+                    "date_fin": str(df_p),
+                })
+                data["absences_prod"] = absences_prod
+                sauvegarder_donnees(data)
+                st.success("Absence enregistrée avec succès !")
+                st.rerun()
+    else:
+        st.info("Aucun technicien de production enregistré.")
+
+    if absences_prod:
+        st.markdown("#### Historique des absences (Prod)")
+        st.dataframe(pd.DataFrame(absences_prod), use_container_width=True)
+        
+        id_sup_absp = st.selectbox("ID Absence à supprimer", [item["id"] for item in absences_prod], key="suppr_absp")
+        if st.button("Supprimer cette absence Prod"):
+            data["absences_prod"] = [item for item in absences_prod if item["id"] != id_sup_absp]
+            sauvegarder_donnees(data)
+            st.success("Absence supprimée.")
+            st.rerun()
+
+# --- ONGLET 4 : ABSENCES CONSOMMABLES ---
+with onglets[3]:
+    st.subheader("Absences Consommables")
+    if techniciens_cons:
+        with st.form("absc"):
+            t_c = st.selectbox("Tech", [t["nom"] for t in techniciens_cons], key="ab_tc")
+            m_c = st.selectbox("Motif", ["Congés Payés", "RTT", "Maladie", "Formation"], key="ab_mc")
+            db_c = st.date_input("Début", auj, key="ab_dbc")
+            df_c = st.date_input("Fin", auj, key="ab_dfc")
+            if st.form_submit_button("Enregistrer absence Cons."):
+                absences_cons.append({
+                    "id": f"ABS-C-{len(absences_cons)+1:03d}",
+                    "technicien": t_c,
+                    "motif": m_c,
+                    "date_debut": str(db_c),
+                    "date_fin": str(df_c),
+                })
+                data["absences_cons"] = absences_cons
+                sauvegarder_donnees(data)
+                st.success("Absence enregistrée avec succès !")
+                st.rerun()
+    else:
+        st.info("Aucun technicien consommables enregistré.")
+
+    if absences_cons:
+        st.markdown("#### Historique des absences (Consommables)")
+        st.dataframe(pd.DataFrame(absences_cons), use_container_width=True)
+        
+        id_sup_absc = st.selectbox("ID Absence à supprimer", [item["id"] for item in absences_cons], key="suppr_absc")
+        if st.button("Supprimer cette absence Cons."):
+            data["absences_cons"] = [item for item in absences_cons if item["id"] != id_sup_absc]
+            sauvegarder_donnees(data)
+            st.success("Absence supprimée.")
+            st.rerun()
+
+# --- ONGLET 5 : SAUVEGARDE & DONNÉES ---
+with onglets[4]:
+    st.header("💾 Sauvegarde, Restauration & Données Brutes")
+    st.markdown("Vous pouvez télécharger l'intégralité de la base de données au format JSON ou réinitialiser les données.")
+
+    if os.path.exists(DATA_FILE):
+        with open(DATA_FILE, "r", encoding="utf-8") as f:
+            json_str = f.read()
         st.download_button(
-            label="Télécharger les données en CSV",
-            data=csv,
-            file_name='planning_atelier.csv',
-            mime='text/csv',
+            label="📥 Télécharger la base de données complète (JSON)",
+            data=json_str,
+            file_name="donnees_composants_sauvegarde.json",
+            mime="application/json",
+            key="download_full_json"
         )
     else:
-        st.info("Aucune donnée à exporter.")
+        st.info("Aucun fichier de données actif pour le moment.")
+
+    st.markdown("---")
+    st.subheader("🗑️ Zone de danger")
+    if st.button("Réinitialiser toutes les données (Effacer le fichier)"):
+        if os.path.exists(DATA_FILE):
+            os.remove(DATA_FILE)
+            st.success("Base de données réinitialisée avec succès !")
+            st.rerun()
+        else:
+            st.info("Le fichier de données n'existe pas encore.")
