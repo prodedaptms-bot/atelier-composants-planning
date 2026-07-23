@@ -196,11 +196,12 @@ absences_prod = data.get("absences_prod", [])
 absences_cons = data.get("absences_cons", [])
 
 ofs_se_cascade = calculer_dates_cascade(
-    plannings_se, techniciens_prod, absences_prod, debut_semaine
-)
-ofs_cons_cascade = calculer_dates_cascade(
-    plannings_cons, techniciens_cons, absences_cons, debut_semaine
-)
+        plannings_se, 
+        techniciens_prod, 
+        absences_prod, 
+        absences_conso,  # <--- Ajout de l'argument manquant ici
+        debut_semaine
+    )
 
 charge_restante_se_h = sum(
     p.get("temps_total_estime_h", 0)
