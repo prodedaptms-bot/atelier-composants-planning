@@ -36,11 +36,13 @@ def convertir_df_en_csv(df):
 
 
 def calculer_dates_cascade(
-    plannings, techniciens, absences, date_reference_debut
+    plannings, techniciens, absences_prod, absences_conso, date_reference_debut
 ):
     """Moteur d'ordonnancement en cascade (Forward Scheduling) respectant strictement la date de lancement souhaitée."""
     abs_par_tech = {}
-    for abs_rec in absences:
+    
+    # 1. Traitement des absences PROD
+    for abs_rec in absences_prod:
         tech = abs_rec.get("technicien")
         try:
             d_deb = datetime.strptime(abs_rec["date_debut"], "%Y-%m-%d").date()
@@ -50,6 +52,21 @@ def calculer_dates_cascade(
                 abs_par_tech[tech] = set()
             while curr <= d_fin:
                 abs_par_tech[tech].add(curr.strftime("%Y-%m-%d"))
+                curr += timedelta(days=1)
+        except:
+            pass
+
+    # 2. Traitement des absences CONSOMMABLES (même logique)
+    for abs_rec in absences_conso:
+        conso = abs_rec.get("consommable") # ou "technicien" selon ta clé dans le dico d'absence conso
+        try:
+            d_deb = datetime.strptime(abs_rec["date_debut"], "%Y-%m-%d").date()
+            d_fin = datetime.strptime(abs_rec["date_fin"], "%Y-%m-%d").date()
+            curr = d_deb
+            if conso not in abs_par_tech:
+                abs_par_tech[conso] = set()
+            while curr <= d_fin:
+                abs_par_tech[conso].add(curr.strftime("%Y-%m-%d"))
                 curr += timedelta(days=1)
         except:
             pass
