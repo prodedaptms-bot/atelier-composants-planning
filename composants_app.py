@@ -12,6 +12,8 @@ import streamlit as st
 # ==========================================
 
 # --- 1. ABSENCES DE PRODUCTION ---
+c_ab1, c_ab2 = st.columns(2)
+
 with c_ab1:
     st.subheader("Absences de Production")
     # ... (ton formulaire d'enregistrement d'absence prod se trouve ici)
