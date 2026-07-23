@@ -6,9 +6,7 @@ import streamlit as st
 
 DATA_FILE = "donnees_composants.json"
 CAPACITE_HEBDO = 35.0
-HEURES_JOUR_DEFAUT = (
-    7.0  # Capacité journalière effective par technicien
-)
+HEURES_JOUR_DEFAUT = 7.0  # Capacité journalière effective par technicien
 
 
 def charger_donnees():
@@ -193,6 +191,7 @@ techniciens_cons = data.get("techniciens_cons", [])
 absences_prod = data.get("absences_prod", [])
 absences_cons = data.get("absences_cons", [])
 
+# Calcul automatique initial des cascades
 ofs_se_cascade = calculer_dates_cascade(
     plannings_se, techniciens_prod, absences_prod, debut_semaine
 )
@@ -629,8 +628,15 @@ with onglets[3]:
                     }
                     plannings_se.append(nouveau_p)
                     data["planification_se"] = plannings_se
+                    # Recalcul de la cascade appliqué immédiatement après modification
+                    data["planification_se"] = calculer_dates_cascade(
+                        plannings_se,
+                        techniciens_prod,
+                        absences_prod,
+                        debut_semaine,
+                    )
                     sauvegarder_donnees(data)
-                    st.success("OF planifié avec succès.")
+                    st.success("OF planifié et cascade recalculée avec succès.")
                     st.rerun()
         else:
             st.warning(
@@ -680,8 +686,17 @@ with onglets[3]:
                     }
                     plannings_cons.append(nouveau_pc)
                     data["planification_cons"] = plannings_cons
+                    # Recalcul automatique de la cascade
+                    data["planification_cons"] = calculer_dates_cascade(
+                        plannings_cons,
+                        techniciens_cons,
+                        absences_cons,
+                        debut_semaine,
+                    )
                     sauvegarder_donnees(data)
-                    st.success("Planification consommable enregistrée.")
+                    st.success(
+                        "Planification consommable et cascade recalculée."
+                    )
                     st.rerun()
         else:
             st.warning(
@@ -691,6 +706,25 @@ with onglets[3]:
 
     with sub_tab_cascade:
         st.subheader("⚡ Gestion & Actions sur les OFs")
+
+        # Bouton de déclenchement manuel du recalcul en cascade global
+        if st.button(
+            "🔄 Forcer le recalcul complet en cascade (Absences, Congés, Charges)"
+        ):
+            data["planification_se"] = calculer_dates_cascade(
+                plannings_se, techniciens_prod, absences_prod, debut_semaine
+            )
+            data["planification_cons"] = calculer_dates_cascade(
+                plannings_cons, techniciens_cons, absences_cons, debut_semaine
+            )
+            sauvegarder_donnees(data)
+            st.success(
+                "Recalcul en cascade effectué et plannings mis à jour !"
+            )
+            st.rerun()
+
+        st.markdown("---")
+
         col_act1, col_act2 = st.columns(2)
         with col_act1:
             if plannings_se:
@@ -703,12 +737,24 @@ with onglets[3]:
                     for p in plannings_se:
                         if p["id_plan"] == id_sup_se:
                             p["statut"] = "Terminé"
+                    data["planification_se"] = calculer_dates_cascade(
+                        plannings_se,
+                        techniciens_prod,
+                        absences_prod,
+                        debut_semaine,
+                    )
                     sauvegarder_donnees(data)
                     st.rerun()
                 if st.button("Supprimer OF SE"):
                     data["planification_se"] = [
                         p for p in plannings_se if p["id_plan"] != id_sup_se
                     ]
+                    data["planification_se"] = calculer_dates_cascade(
+                        data["planification_se"],
+                        techniciens_prod,
+                        absences_prod,
+                        debut_semaine,
+                    )
                     sauvegarder_donnees(data)
                     st.rerun()
 
@@ -723,12 +769,24 @@ with onglets[3]:
                     for p in plannings_cons:
                         if p["id_plan"] == id_sup_co:
                             p["statut"] = "Terminé"
+                    data["planification_cons"] = calculer_dates_cascade(
+                        plannings_cons,
+                        techniciens_cons,
+                        absences_cons,
+                        debut_semaine,
+                    )
                     sauvegarder_donnees(data)
                     st.rerun()
                 if st.button("Supprimer OF Cons."):
                     data["planification_cons"] = [
                         p for p in plannings_cons if p["id_plan"] != id_sup_co
                     ]
+                    data["planification_cons"] = calculer_dates_cascade(
+                        data["planification_cons"],
+                        techniciens_cons,
+                        absences_cons,
+                        debut_semaine,
+                    )
                     sauvegarder_donnees(data)
                     st.rerun()
 
@@ -876,8 +934,18 @@ with onglets[5]:
                         "date_fin": str(df_p),
                     })
                     data["absences_prod"] = absences_prod
+                    # Recalcul automatique de la cascade en cas de saisie de congé/absence
+                    data["planification_se"] = calculer_dates_cascade(
+                        plannings_se,
+                        techniciens_prod,
+                        absences_prod,
+                        debut_semaine,
+                    )
                     sauvegarder_donnees(data)
-                    st.success("Absence enregistrée.")
+                    st.success(
+                        "Absence Prod enregistrée et planning recalculé en"
+                        " cascade !"
+                    )
                     st.rerun()
         if absences_prod:
             st.dataframe(pd.DataFrame(absences_prod), use_container_width=True)
@@ -890,6 +958,12 @@ with onglets[5]:
                 data["absences_prod"] = [
                     a for a in absences_prod if a["id"] != id_suppr_absp
                 ]
+                data["planification_se"] = calculer_dates_cascade(
+                    plannings_se,
+                    techniciens_prod,
+                    data["absences_prod"],
+                    debut_semaine,
+                )
                 sauvegarder_donnees(data)
                 st.rerun()
 
@@ -916,8 +990,18 @@ with onglets[5]:
                         "date_fin": str(df_c),
                     })
                     data["absences_cons"] = absences_cons
+                    # Recalcul automatique de la cascade
+                    data["planification_cons"] = calculer_dates_cascade(
+                        plannings_cons,
+                        techniciens_cons,
+                        absences_cons,
+                        debut_semaine,
+                    )
                     sauvegarder_donnees(data)
-                    st.success("Absence enregistrée.")
+                    st.success(
+                        "Absence Cons. enregistrée et planning recalculé en"
+                        " cascade !"
+                    )
                     st.rerun()
         if absences_cons:
             st.dataframe(pd.DataFrame(absences_cons), use_container_width=True)
@@ -930,6 +1014,12 @@ with onglets[5]:
                 data["absences_cons"] = [
                     a for a in absences_cons if a["id"] != id_suppr_absc
                 ]
+                data["planification_cons"] = calculer_dates_cascade(
+                    plannings_cons,
+                    techniciens_cons,
+                    data["absences_cons"],
+                    debut_semaine,
+                )
                 sauvegarder_donnees(data)
                 st.rerun()
 
