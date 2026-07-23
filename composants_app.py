@@ -1,7 +1,7 @@
 import os
+import json
 import pandas as pd
 import streamlit as st
-import json
 
 DATA_FILE = "donnees_composants_sauvegarde.json"
 
@@ -164,15 +164,15 @@ with onglets[3]:
             st.success("Absence supprimée.")
             st.rerun()
 
-# --- ONGLET 5 : ABSENCES GLOBALES (Vue côte à côte d'origine) ---
+# --- ONGLET 5 : ABSENCES GLOBALES (2 colonnes) ---
 with onglets[4]:
-    st.header("📅 Vue d'ensemble des Absences")
+    st.header("📅 Vue globale des Absences")
     c_ab1, c_ab2 = st.columns(2)
     
     with c_ab1:
         st.subheader("Absences Production")
         if techniciens_prod:
-            with st.form("absp_global"):
+            with st.form("absp_g"):
                 t_p = st.selectbox("Tech", [t["nom"] for t in techniciens_prod], key="ab_tp_g")
                 m_p = st.selectbox("Motif", ["Congés Payés", "RTT", "Maladie", "Formation"], key="ab_mp_g")
                 db_p = st.date_input("Début", auj, key="ab_dbp_g")
@@ -193,30 +193,21 @@ with onglets[4]:
             st.info("Aucun technicien de production enregistré.")
 
         if absences_prod:
-            st.markdown("#### Historique des absences (Prod)")
+            st.markdown("#### Historique (Prod)")
             st.dataframe(pd.DataFrame(absences_prod), use_container_width=True)
-            
-            id_sup_absp = st.selectbox(
-                "ID Absence à supprimer",
-                [item["id"] for item in absences_prod],
-                key="suppr_absp_g"
-            )
-            if st.button("Supprimer cette absence Prod", key="btn_suppr_absp_g"):
-                data["absences_prod"] = [
-                    item for item in absences_prod if item["id"] != id_sup_absp
-                ]
+            id_sup_absp_g = st.selectbox("ID Absence à supprimer", [item["id"] for item in absences_prod], key="suppr_absp_g")
+            if st.button("Suppr. absence Prod", key="btn_sup_ap_g"):
+                data["absences_prod"] = [item for item in absences_prod if item["id"] != id_sup_absp_g]
                 sauvegarder_donnees(data)
-                st.success("Absence supprimée.")
+                st.success("Supprimé.")
                 st.rerun()
 
     with c_ab2:
         st.subheader("Absences Consommables")
         if techniciens_cons:
-            with st.form("absc_global"):
+            with st.form("absc_g"):
                 t_c = st.selectbox("Tech", [t["nom"] for t in techniciens_cons], key="ab_tc_g")
-                m_c = st.selectbox(
-                    "Motif", ["Congés Payés", "RTT", "Maladie", "Formation"], key="ab_mc_g"
-                )
+                m_c = st.selectbox("Motif", ["Congés Payés", "RTT", "Maladie", "Formation"], key="ab_mc_g")
                 db_c = st.date_input("Début", auj, key="ab_dbc_g")
                 df_c = st.date_input("Fin", auj, key="ab_dfc_g")
                 if st.form_submit_button("Enregistrer absence Cons."):
@@ -235,31 +226,24 @@ with onglets[4]:
             st.info("Aucun technicien consommables enregistré.")
 
         if absences_cons:
-            st.markdown("#### Historique des absences (Consommables)")
+            st.markdown("#### Historique (Consommables)")
             st.dataframe(pd.DataFrame(absences_cons), use_container_width=True)
-            
-            id_sup_absc = st.selectbox(
-                "ID Absence à supprimer",
-                [item["id"] for item in absences_cons],
-                key="suppr_absc_g"
-            )
-            if st.button("Supprimer cette absence Cons.", key="btn_suppr_absc_g"):
-                data["absences_cons"] = [
-                    item for item in absences_cons if item["id"] != id_sup_absc
-                ]
+            id_sup_absc_g = st.selectbox("ID Absence à supprimer", [item["id"] for item in absences_cons], key="suppr_absc_g")
+            if st.button("Suppr. absence Cons.", key="btn_sup_ac_g"):
+                data["absences_cons"] = [item for item in absences_cons if item["id"] != id_sup_absc_g]
                 sauvegarder_donnees(data)
-                st.success("Absence supprimée.")
+                st.success("Supprimé.")
                 st.rerun()
 
 # --- ONGLET 6 : PLANNING ---
 with onglets[5]:
-    st.header("🗓️ Planning Global")
-    st.info("Espace dédié à l'affichage global du planning (en cours de configuration).")
+    st.header("🗓️ Planning")
+    st.info("Espace dédié au planning global.")
 
 # --- ONGLET 7 : SAUVEGARDE & DONNÉES ---
 with onglets[6]:
     st.header("💾 Sauvegarde, Restauration & Données Brutes")
-    st.markdown("Vous pouvez télécharger l'intégralité de la base de données au format JSON ou réinitialiser les données.")
+    st.markdown("Téléchargez l'intégralité de la base de données au format JSON ou réinitialisez les données.")
 
     if os.path.exists(DATA_FILE):
         with open(DATA_FILE, "r", encoding="utf-8") as f:
