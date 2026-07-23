@@ -189,11 +189,11 @@ debut_semaine = auj - timedelta(days=auj.weekday())
 fin_semaine = debut_semaine + timedelta(days=6)
 
 plannings_se = data.get("planification_se", [])
-plannings_cons = data.get("planification_cons", [])
+plannings_conso = data.get("planification_cons", [])
 techniciens_prod = data.get("techniciens_prod", [])
-techniciens_cons = data.get("techniciens_cons", [])
+techniciens_conso = data.get("techniciens_cons", [])
 absences_prod = data.get("absences_prod", [])
-absences_cons = data.get("absences_cons", [])
+absences_conso = data.get("absences_cons", [])
 
 ofs_se_cascade = calculer_dates_cascade(
         plannings_se, 
