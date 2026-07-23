@@ -1,10 +1,13 @@
 import streamlit as st
 
-# --- CONFIGURATION DE LA PAGE (DOIT ÊTRE STRICTEMENT EN PREMIER) ---
-st.set_page_config(
-    page_title="Pilotage Atelier - Planification & Charges",
-    page_layout="wide"
-)
+# --- PROTECTION DE CONFIGURATION DE LA PAGE ---
+try:
+    st.set_page_config(
+        page_title="Pilotage Atelier - Planification & Charges",
+        page_layout="wide"
+    )
+except Exception:
+    pass
 
 from datetime import datetime, timedelta
 import pandas as pd
