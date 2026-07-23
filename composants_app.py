@@ -4,7 +4,6 @@ import os
 import pandas as pd
 import streamlit as st
 
-
 DATA_FILE = "donnees_composants.json"
 CAPACITE_HEBDO = 35.0
 HEURES_JOUR_DEFAUT = 7.0  # Capacité journalière effective par technicien
@@ -36,13 +35,11 @@ def convertir_df_en_csv(df):
 
 
 def calculer_dates_cascade(
-    plannings, techniciens, absences_prod, absences_conso, date_reference_debut
+    plannings, techniciens, absences, date_reference_debut
 ):
     """Moteur d'ordonnancement en cascade (Forward Scheduling) respectant strictement la date de lancement souhaitée."""
     abs_par_tech = {}
-    
-    # 1. Traitement des absences PROD
-    for abs_rec in absences_prod:
+    for abs_rec in absences:
         tech = abs_rec.get("technicien")
         try:
             d_deb = datetime.strptime(abs_rec["date_debut"], "%Y-%m-%d").date()
@@ -52,21 +49,6 @@ def calculer_dates_cascade(
                 abs_par_tech[tech] = set()
             while curr <= d_fin:
                 abs_par_tech[tech].add(curr.strftime("%Y-%m-%d"))
-                curr += timedelta(days=1)
-        except:
-            pass
-
-    # 2. Traitement des absences CONSOMMABLES (même logique)
-    for abs_rec in absences_conso:
-        conso = abs_rec.get("consommable") # ou "technicien" selon ta clé dans le dico d'absence conso
-        try:
-            d_deb = datetime.strptime(abs_rec["date_debut"], "%Y-%m-%d").date()
-            d_fin = datetime.strptime(abs_rec["date_fin"], "%Y-%m-%d").date()
-            curr = d_deb
-            if conso not in abs_par_tech:
-                abs_par_tech[conso] = set()
-            while curr <= d_fin:
-                abs_par_tech[conso].add(curr.strftime("%Y-%m-%d"))
                 curr += timedelta(days=1)
         except:
             pass
@@ -189,19 +171,18 @@ debut_semaine = auj - timedelta(days=auj.weekday())
 fin_semaine = debut_semaine + timedelta(days=6)
 
 plannings_se = data.get("planification_se", [])
-plannings_conso = data.get("planification_cons", [])
+plannings_cons = data.get("planification_cons", [])
 techniciens_prod = data.get("techniciens_prod", [])
-techniciens_conso = data.get("techniciens_cons", [])
+techniciens_cons = data.get("techniciens_cons", [])
 absences_prod = data.get("absences_prod", [])
-absences_conso = data.get("absences_cons", [])
+absences_cons = data.get("absences_cons", [])
 
 ofs_se_cascade = calculer_dates_cascade(
-        plannings_se, 
-        techniciens_prod, 
-        absences_prod, 
-        absences_conso,  # <--- Ajout de l'argument manquant ici
-        debut_semaine
-    )
+    plannings_se, techniciens_prod, absences_prod, debut_semaine
+)
+ofs_cons_cascade = calculer_dates_cascade(
+    plannings_cons, techniciens_cons, absences_cons, debut_semaine
+)
 
 charge_restante_se_h = sum(
     p.get("temps_total_estime_h", 0)
@@ -805,8 +786,6 @@ with onglets[4]:
 with onglets[5]:
     st.header("🌴 Congés & Absences")
     c_ab1, c_ab2 = st.columns(2)
-    
-    # --- 1. ABSENCES PROD ---
     with c_ab1:
         st.subheader("Absences Prod")
         if techniciens_prod:
@@ -817,7 +796,7 @@ with onglets[5]:
                 )
                 db_p = st.date_input("Début", auj, key="ab_db")
                 df_p = st.date_input("Fin", auj, key="ab_df")
-                if st.form_submit_button("Enregistrer absence Prod"):
+                if st.form_submit_button("Enregistrer absence"):
                     absences_prod.append({
                         "id": f"ABS-P-{len(absences_prod)+1:03d}",
                         "technicien": t_p,
@@ -831,38 +810,6 @@ with onglets[5]:
                     st.rerun()
             if absences_prod:
                 st.dataframe(pd.DataFrame(absences_prod), use_container_width=True)
-
-    # --- 2. ABSENCES CONSOMMABLES ---
-    with c_ab2:
-        st.subheader("Absences Consommables")
-        # Assure-toi d'avoir une liste 'consommables' ou adapte la variable selon ton code
-        consommables = data.get("consommables", []) 
-        absences_conso = data.get("absences_conso", [])
-        
-        if consommables:
-            with st.form("absco"):
-                t_c = st.selectbox("Consommable / Intérimaire", [c["nom"] for c in consommables], key="abs_c_nom")
-                m_c = st.selectbox(
-                    "Motif", ["Congés Payés", "Fin de contrat / Interruption", "Maladie", "Absence"], key="abs_c_motif"
-                )
-                db_c = st.date_input("Début", auj, key="ab_db_c")
-                df_c = st.date_input("Fin", auj, key="ab_df_c")
-                if st.form_submit_button("Enregistrer absence Consommable"):
-                    absences_conso.append({
-                        "id": f"ABS-C-{len(absences_conso)+1:03d}",
-                        "consommable": t_c,
-                        "motif": m_c,
-                        "date_debut": str(db_c),
-                        "date_fin": str(df_c),
-                    })
-                    data["absences_conso"] = absences_conso
-                    sauvegarder_donnees(data)
-                    st.success("Absence consommable enregistrée.")
-                    st.rerun()
-            if absences_conso:
-                st.dataframe(pd.DataFrame(absences_conso), use_container_width=True)
-        else:
-            st.info("Aucun consommable enregistré dans la base pour le moment.")
 
 
 # --- ONGLET 7 : SAUVEGARDE & DONNÉES (EXPORT / IMPORT) ---
