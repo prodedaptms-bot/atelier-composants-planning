@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 import pandas as pd
 import streamlit as st
 
-# --- CONFIGURATION DE BASE DE LA PAGE ---
+# --- CONFIGURATION DE BASE DE LA PAGE (DOIT ÊTRE LA TOUTE PREMIÈRE COMMANDE STREAMLIT) ---
 st.set_page_config(
     page_title="Pilotage Atelier - Planification & Charges",
     page_layout="wide",
@@ -10,9 +10,8 @@ st.set_page_config(
 
 HEURES_JOUR_DEFAUT = 7.0
 
-# --- FONCTIONS DE SAUVEGARDE / CHARGEMENT (Simulées ou connectées à ton stockage) ---
+# --- FONCTIONS DE SAUVEGARDE / CHARGEMENT ---
 def charger_donnees():
-    # Placeholder pour tes données chargées depuis un fichier JSON/DB
     if "donnees_atelier" not in st.session_state:
         st.session_state["donnees_atelier"] = {
             "plannings_se": [],
@@ -294,7 +293,7 @@ with onglets[0]:
         else:
             st.info("Aucune donnée de date de cascade disponible.")
 
-# --- ONGLES 2 à 5 : PLACEHOLDERS POUR LES AUTRES ONGLETS ---
+# --- ONGLETS 2 à 5 ---
 with onglets[1]:
     st.subheader("🛠️ Gestion des OFs Sous-ensembles")
     if ofs_se_cascade:
