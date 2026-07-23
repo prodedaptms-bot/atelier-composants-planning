@@ -786,6 +786,8 @@ with onglets[4]:
 with onglets[5]:
     st.header("🌴 Congés & Absences")
     c_ab1, c_ab2 = st.columns(2)
+    
+    # --- 1. ABSENCES PROD ---
     with c_ab1:
         st.subheader("Absences Prod")
         if techniciens_prod:
@@ -796,7 +798,7 @@ with onglets[5]:
                 )
                 db_p = st.date_input("Début", auj, key="ab_db")
                 df_p = st.date_input("Fin", auj, key="ab_df")
-                if st.form_submit_button("Enregistrer absence"):
+                if st.form_submit_button("Enregistrer absence Prod"):
                     absences_prod.append({
                         "id": f"ABS-P-{len(absences_prod)+1:03d}",
                         "technicien": t_p,
@@ -811,7 +813,37 @@ with onglets[5]:
             if absences_prod:
                 st.dataframe(pd.DataFrame(absences_prod), use_container_width=True)
 
-
+    # --- 2. ABSENCES CONSOMMABLES ---
+    with c_ab2:
+        st.subheader("Absences Consommables")
+        # Assure-toi d'avoir une liste 'consommables' ou adapte la variable selon ton code
+        consommables = data.get("consommables", []) 
+        absences_conso = data.get("absences_conso", [])
+        
+        if consommables:
+            with st.form("absco"):
+                t_c = st.selectbox("Consommable / Intérimaire", [c["nom"] for c in consommables], key="abs_c_nom")
+                m_c = st.selectbox(
+                    "Motif", ["Congés Payés", "Fin de contrat / Interruption", "Maladie", "Absence"], key="abs_c_motif"
+                )
+                db_c = st.date_input("Début", auj, key="ab_db_c")
+                df_c = st.date_input("Fin", auj, key="ab_df_c")
+                if st.form_submit_button("Enregistrer absence Consommable"):
+                    absences_conso.append({
+                        "id": f"ABS-C-{len(absences_conso)+1:03d}",
+                        "consommable": t_c,
+                        "motif": m_c,
+                        "date_debut": str(db_c),
+                        "date_fin": str(df_c),
+                    })
+                    data["absences_conso"] = absences_conso
+                    sauvegarder_donnees(data)
+                    st.success("Absence consommable enregistrée.")
+                    st.rerun()
+            if absences_conso:
+                st.dataframe(pd.DataFrame(absences_conso), use_container_width=True)
+        else:
+            st.info("Aucun consommable enregistré dans la base pour le moment.")
 # --- ONGLET 7 : SAUVEGARDE & DONNÉES (EXPORT / IMPORT) ---
 with onglets[6]:
     st.header("💾 Gestion de la Base de Données (Sauvegarde & Import)")
