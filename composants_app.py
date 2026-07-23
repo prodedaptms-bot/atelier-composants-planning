@@ -162,6 +162,7 @@ onglets = st.tabs([
     "👥 Équipe",
     "🌴 Congés & Absences",
     "💾 Sauvegarde & Données",
+    "📈 KPI & Historique",
 ])
 
 auj = datetime.today().date()
@@ -908,3 +909,78 @@ with onglets[6]:
     st.markdown("---")
     st.subheader("🔍 Visualisation brute des données (JSON)")
     st.json(data)
+
+# --- ONGLET 8 : KPI & HISTORIQUE ---
+with onglets[7]:
+    st.header("📈 Suivi des Performances & Quantités Terminées")
+    st.markdown("Analyse des volumes réalisés (Sous-ensembles et Consommables terminés).")
+
+    # 1. Rassembler tous les OFs terminés des deux catégories
+    tous_ofs_fin = []
+    
+    for p in data.get("planification_se", []):
+        if p.get("statut") == "Terminé":
+            item = p.copy()
+            item["Type"] = "Sous-ensemble"
+            item["Nom_Produit"] = p.get("sous_ensemble")
+            tous_ofs_fin.append(item)
+            
+    for p in data.get("planification_cons", []):
+        if p.get("statut") == "Terminé":
+            item = p.copy()
+            item["Type"] = "Consommable"
+            item["Nom_Produit"] = p.get("consommable")
+            tous_ofs_fin.append(item)
+
+    if tous_ofs_fin:
+        df_fin = pd.DataFrame(tous_ofs_fin)
+        
+        # Utilisation de la date de fin cascade (ou date de lancement si absent) pour le découpage temporel
+        df_fin["date_ref"] = pd.to_datetime(df_fin["date_fin_cascade"].fillna(df_fin["date_lancement"]))
+        df_fin["Année"] = df_fin["date_ref"].dt.year
+        df_fin["Mois"] = df_fin["date_ref"].dt.to_period("M").astype(str)
+        df_fin["Semaine"] = df_fin["date_ref"].dt.strftime("S%V (%Y)")
+
+        # 2. Filtre d'affichage global
+        st.subheader("📊 Volumes globaux réalisés")
+        
+        col_kpi1, col_kpi2, col_kpi3 = st.columns(3)
+        total_global_qte = df_fin["quantite"].sum()
+        total_se_qte = df_fin[df_fin["Type"] == "Sous-ensemble"]["quantite"].sum()
+        total_cons_qte = df_fin[df_fin["Type"] == "Consommable"]["quantite"].sum()
+
+        with col_kpi1:
+            st.metric("Total Pièces Terminées", f"{total_global_qte} unités")
+        with col_kpi2:
+            st.metric("Total Sous-ensembles", f"{total_se_qte} unités")
+        with col_kpi3:
+            st.metric("Total Consommables", f"{total_cons_qte} unités")
+
+        st.markdown("---")
+
+        # 3. Tableaux croisés / Agrégations simples
+        vue_kpi = st.selectbox(
+            "Périodicité de l'historique :",
+            ["Par Semaine", "Par Mois", "Par Année"]
+        )
+
+        if vue_kpi == "Par Semaine":
+            col_groupe = "Semaine"
+        elif vue_kpi == "Par Mois":
+            col_groupe = "Mois"
+        else:
+            col_groupe = "Année"
+
+        # Agrégation par période et par type de produit
+        df_agg = df_fin.groupby([col_groupe, "Type", "Nom_Produit"])["quantite"].sum().reset_index()
+        
+        st.dataframe(df_agg, use_container_width=True)
+
+        st.download_button(
+            label="📥 Exporter l'historique des KPI (CSV)",
+            data=convertir_df_en_csv(df_agg),
+            file_name=f"historique_kpi_{vue_kpi.lower().replace(' ', '_')}.csv",
+            mime="text/csv"
+        )
+    else:
+        st.info("Aucun OF n'a encore été marqué comme 'Terminé' pour le moment. Bascule des OFs en statut 'Terminé' dans l'onglet de planification pour alimenter ces indicateurs.")
