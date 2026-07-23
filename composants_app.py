@@ -2,21 +2,16 @@ import json
 import pandas as pd
 import streamlit as st
 
-# --- Supposition : tes variables globales, chargement de données ('data'), 
-#      'auj' et la définition de tes onglets sont faits un peu plus haut.
-# Ex: onglets = st.tabs(["Onglet 1", "Onglet 2", "Onglet 3", "Onglet 4", "Onglet 5", "Absences", "Sauvegarde"])
+# --- (Dans ton onglet dédié aux absences, par exemple dans ton 'with onglets[5]:') ---
+st.header("📅 Gestion des Absences")
 
-
-# ==========================================
-# GESTION DES ABSENCES (À placer dans ton onglet dédié aux absences)
-# ==========================================
-
-# --- 1. ABSENCES DE PRODUCTION ---
+# Création des deux colonnes pour séparer Production et Consommables
 c_ab1, c_ab2 = st.columns(2)
 
+# --- 1. ABSENCES DE PRODUCTION ---
 with c_ab1:
     st.subheader("Absences de Production")
-    # ... (ton formulaire d'enregistrement d'absence prod se trouve ici)
+    # (Ton formulaire d'ajout d'absence prod va ici si tu l'as)
     
     if absences_prod:
         st.dataframe(pd.DataFrame(absences_prod), use_container_width=True)
@@ -30,7 +25,7 @@ with c_ab1:
                 a for a in absences_prod if a["id"] != id_sup_abp
             ]
             sauvegarder_donnees(data)
-            st.success("Absence Prod supprimée avec succès.")
+            st.success("Absence Prod supprimée.")
             st.rerun()
 
 # --- 2. ABSENCES CONSOMMABLES ---
@@ -74,13 +69,14 @@ with c_ab2:
                 a for a in absences_cons if a["id"] != id_sup_abc
             ]
             sauvegarder_donnees(data)
-            st.success("Absence Consommables supprimée avec succès.")
+            st.success("Absence Consommables supprimée.")
             st.rerun()
 
 
 # ==========================================
-# ONGLET 7 : SAUVEGARDE & DONNÉES BRUTES (À placer tout à la fin)
+# ONGLET 7 : SAUVEGARDE & DONNÉES BRUTES
 # ==========================================
+# (À placer tout à la fin de ton fichier, dans ton dernier onglet)
 
 with onglets[6]:
     st.header("💾 Sauvegarde, Restauration & Données Brutes")
