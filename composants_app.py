@@ -2,15 +2,10 @@ from datetime import datetime, timedelta
 import pandas as pd
 import streamlit as st
 
-# --- CONFIGURATION DE BASE DE LA PAGE (DOIT ÊTRE LA TOUTE PREMIÈRE COMMANDE STREAMLIT) ---
-st.set_page_config(
-    page_title="Pilotage Atelier - Planification & Charges",
-    page_layout="wide",
-)
+st.set_page_config(page_title="Pilotage Atelier - Planification & Charges", page_layout="wide")
 
 HEURES_JOUR_DEFAUT = 7.0
 
-# --- FONCTIONS DE SAUVEGARDE / CHARGEMENT ---
 def charger_donnees():
     if "donnees_atelier" not in st.session_state:
         st.session_state["donnees_atelier"] = {
@@ -34,17 +29,12 @@ techniciens_cons = data.get("technicien_cons", [])
 absences_prod = data.get("absences_prod", [])
 absences_cons = data.get("absences_cons", [])
 
-# Regroupement global des absences pour les moteurs de calcul
 absences_globales = absences_prod.copy()
 for ac in absences_cons:
     if ac not in absences_globales:
         absences_globales.append(ac)
 
-# --- MOTEUR DE CASCADE ROBUSTE ---
-def calculer_dates_cascade(
-    plannings, techniciens, absences, date_reference_debut
-):
-    """Moteur d'ordonnancement en cascade (Forward Scheduling) respectant la date de lancement et les absences."""
+def calculer_dates_cascade(plannings, techniciens, absences, date_reference_debut):
     abs_par_tech = {}
     for abs_rec in absences:
         tech = abs_rec.get("technicien")
@@ -81,16 +71,13 @@ def calculer_dates_cascade(
         while heures_restantes > 0 and securite < 365:
             while curr_date.weekday() >= 5 or curr_date.strftime("%Y-%m-%d") in technicien_absences:
                 curr_date += timedelta(days=1)
-
             capacite_jour = HEURES_JOUR_DEFAUT
-
             if heures_restantes <= capacite_jour:
                 break
             else:
                 heures_restantes -= capacite_jour
                 curr_date += timedelta(days=1)
                 securite += 1
-
         return curr_date
 
     planning_ordonnance = []
@@ -143,12 +130,10 @@ def calculer_dates_cascade(
 
     return planning_ordonnance
 
-# --- CALENDRIER DE REFERENCE ---
 auj = datetime.today().date()
 debut_semaine = auj - timedelta(days=auj.weekday())
 fin_semaine = debut_semaine + timedelta(days=4)
 
-# Exécution des calculs cascade
 ofs_se_cascade = calculer_dates_cascade(plannings_se, techniciens_prod, absences_globales, debut_semaine)
 ofs_cons_cascade = calculer_dates_cascade(plannings_cons, techniciens_cons, absences_globales, debut_semaine)
 
@@ -161,12 +146,10 @@ capacite_dispo_cons_h = len(techniciens_cons) * 5 * HEURES_JOUR_DEFAUT
 def convertir_df_en_csv(df):
     return df.to_csv(index=False).encode('utf-8')
 
-# --- INTERFACE STREAMLIT ---
 st.title("⚙️ Pilotage & Planification Atelier")
 
 onglets = st.tabs(["Tableau de Bord", "OFs Sous-ensembles", "OFs Consommables", "Techniciens", "Planification", "Congés & Absences"])
 
-# --- ONGLET 1 : TABLEAU DE BORD ---
 with onglets[0]:
     st.header("📊 Tableau de Bord & Suivi des OFs")
     st.markdown(f"**Semaine en cours :** du {debut_semaine.strftime('%d/%m/%Y')} au {fin_semaine.strftime('%d/%m/%Y')}")
@@ -293,7 +276,6 @@ with onglets[0]:
         else:
             st.info("Aucune donnée de date de cascade disponible.")
 
-# --- ONGLETS 2 à 5 ---
 with onglets[1]:
     st.subheader("🛠️ Gestion des OFs Sous-ensembles")
     if ofs_se_cascade:
@@ -313,22 +295,18 @@ with onglets[4]:
     st.subheader("📅 Vue Planning / Gantt")
     st.info("Module de planification globale.")
 
-# --- ONGLET 6 : CONGÉS & ABSENCES ---
 with onglets[5]:
     st.header("🌴 Congés & Absences")
     c_ab1, c_ab2 = st.columns(2)
     with c_ab1:
         st.subheader("Enregistrer une absence / un congé")
-        
         tous_les_techs = [t["nom"] for t in techniciens_prod] + [t["nom"] for t in techniciens_cons]
         tous_les_techs = list(dict.fromkeys(tous_les_techs))
 
         if tous_les_techs:
             with st.form("form_abs_global"):
                 t_p = st.selectbox("Technicien", tous_les_techs)
-                m_p = st.selectbox(
-                    "Motif", ["Congés Payés", "RTT", "Maladie", "Formation"]
-                )
+                m_p = st.selectbox("Motif", ["Congés Payés", "RTT", "Maladie", "Formation"])
                 db_p = st.date_input("Date de début", auj, key="ab_db")
                 df_p = st.date_input("Date de fin", auj, key="ab_df")
                 
@@ -357,11 +335,7 @@ with onglets[5]:
             df_abs = pd.DataFrame(absences_globales)
             st.dataframe(df_abs, use_container_width=True, hide_index=True)
             
-            id_sup_abs = st.selectbox(
-                "ID de l'absence à supprimer",
-                [a["id"] for a in absences_globales],
-                key="del_abs"
-            )
+            id_sup_abs = st.selectbox("ID de l'absence à supprimer", [a["id"] for a in absences_globales], key="del_abs")
             if st.button("Supprimer cette absence"):
                 data["absences_prod"] = [a for a in absences_prod if a["id"] != id_sup_abs]
                 data["absences_cons"] = [a for a in absences_cons if a["id"] != id_sup_abs]
