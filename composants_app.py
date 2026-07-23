@@ -1,8 +1,13 @@
-from datetime import datetime, timedelta
-import pandas as pd
 import streamlit as st
 
-st.set_page_config(page_title="Pilotage Atelier - Planification & Charges", page_layout="wide")
+# --- CONFIGURATION DE LA PAGE (DOIT ÊTRE STRICTEMENT EN PREMIER) ---
+st.set_page_config(
+    page_title="Pilotage Atelier - Planification & Charges",
+    page_layout="wide"
+)
+
+from datetime import datetime, timedelta
+import pandas as pd
 
 HEURES_JOUR_DEFAUT = 7.0
 
