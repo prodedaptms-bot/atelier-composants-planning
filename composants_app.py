@@ -783,34 +783,64 @@ with onglets[4]:
 
 
 # --- ONGLET 6 : CONGÉS & ABSENCES ---
+# --- ONGLET 6 : CONGÉS & ABSENCES ---
 with onglets[5]:
     st.header("🌴 Congés & Absences")
     c_ab1, c_ab2 = st.columns(2)
     with c_ab1:
-        st.subheader("Absences Prod")
-        if techniciens_prod:
-            with st.form("absp"):
-                t_p = st.selectbox("Tech", [t["nom"] for t in techniciens_prod])
+        st.subheader("Enregistrer une absence / un congé")
+        
+        # Réunir tous les techniciens (Prod + Consommables) avec une distinction claire si besoin
+        tous_les_techs = [t["nom"] for t in techniciens_prod] + [t["nom"] for t in techniciens_cons]
+        # Éviter les doublons stricts si un nom apparaît des deux côtés par erreur
+        tous_les_techs = list(dict.fromkeys(tous_les_techs))
+
+        if tous_les_techs:
+            with st.form("form_abs_global"):
+                t_p = st.selectbox("Technicien", tous_les_techs)
                 m_p = st.selectbox(
                     "Motif", ["Congés Payés", "RTT", "Maladie", "Formation"]
                 )
-                db_p = st.date_input("Début", auj, key="ab_db")
-                df_p = st.date_input("Fin", auj, key="ab_df")
-                if st.form_submit_button("Enregistrer absence"):
-                    absences_prod.append({
-                        "id": f"ABS-P-{len(absences_prod)+1:03d}",
-                        "technicien": t_p,
-                        "motif": m_p,
-                        "date_debut": str(db_p),
-                        "date_fin": str(df_p),
-                    })
-                    data["absences_prod"] = absences_prod
-                    sauvegarder_donnees(data)
-                    st.success("Absence enregistrée.")
-                    st.rerun()
-            if absences_prod:
-                st.dataframe(pd.DataFrame(absences_prod), use_container_width=True)
+                db_p = st.date_input("Date de début", auj, key="ab_db")
+                df_p = st.date_input("Date de fin", auj, key="ab_df")
+                
+                if st.form_submit_button("Enregistrer l'absence"):
+                    if db_p <= df_p:
+                        absences_prod.append({
+                            "id": f"ABS-{len(absences_prod)+len(absences_cons)+1:03d}",
+                            "technicien": t_p,
+                            "motif": m_p,
+                            "date_debut": str(db_p),
+                            "date_fin": str(df_p),
+                        })
+                        # On stocke dans absences_prod (le moteur d'ordonnancement cascade lit cette liste globale pour bloquer les jours)
+                        data["absences_prod"] = absences_prod
+                        sauvegarder_donnees(data)
+                        st.success(f"Absence de {t_p} enregistrée avec succès.")
+                        st.rerun()
+                    else:
+                        st.error("La date de fin doit être postérieure ou égale à la date de début.")
+        else:
+            st.warning("Aucun technicien enregistré (ni en Production, ni en Consommables).")
 
+    with c_ab2:
+        st.subheader("Liste des absences enregistrées")
+        if absences_prod:
+            df_abs = pd.DataFrame(absences_prod)
+            st.dataframe(df_abs, use_container_width=True, hide_index=True)
+            
+            id_sup_abs = st.selectbox(
+                "ID de l'absence à supprimer",
+                [a["id"] for a in absences_prod],
+                key="del_abs"
+            )
+            if st.button("Supprimer cette absence"):
+                data["absences_prod"] = [a for a in absences_prod if a["id"] != id_sup_abs]
+                sauvegarder_donnees(data)
+                st.success("Absence supprimée.")
+                st.rerun()
+        else:
+            st.info("Aucune absence enregistrée pour le moment.")
 
 # --- ONGLET 7 : SAUVEGARDE & DONNÉES (EXPORT / IMPORT) ---
 with onglets[6]:
