@@ -502,24 +502,19 @@ with onglets[1]:
     st.markdown("Suivi des volumes produits et mis en stock (basé sur les OFs au statut **Terminé**).")
 
     # On fusionne / traite les OFs terminés des deux catégories
-    # Pour l'historique, on regarde les plannings enregistrés ayant le statut "Terminé"
     termines_se = [p for p in plannings_se if p.get("statut") == "Terminé"]
     termines_cons = [p for p in plannings_cons if p.get("statut") == "Terminé"]
 
     st.subheader("📦 Consommables mis en stock")
     if termines_cons:
         df_tc = pd.DataFrame(termines_cons)
-        # On s'assure d'avoir une date de fin ou de référence (on utilise date_lancement ou date_fin_cascade si dispo)
         if "date_fin_cascade" not in df_tc.columns:
             df_tc["date_fin_cascade"] = df_tc.get("date_lancement", str(auj))
         
         df_tc["date_ref"] = pd.to_datetime(df_tc["date_fin_cascade"].astype(str).str[:10], errors="coerce").dt.date
         df_tc = df_tc.dropna(subset=["date_ref"])
 
-        # Calculs par semaine, mois, YTD
         annee_courante = auj.year
-        
-        # Filtrage par période par rapport à la date du jour auj
         semaine_actuelle_num = auj.isocalendar()[1]
         
         qte_semaine_cons = 0
@@ -545,7 +540,7 @@ with onglets[1]:
             st.metric(f"Année {annee_courante} (YTD)", f"{qte_ytd_cons} unités")
 
         st.markdown("##### Historique détaillé des Consommables terminés")
-        st.dataframe(df_tc[["id_plan", "consommable", "quantite", "assigne", "date_fin_cascade", "priorite"]], use_countainer_width=True, hide_index=True)
+        st.dataframe(df_tc[["id_plan", "consommable", "quantite", "assigne", "date_fin_cascade", "priorite"]], use_container_width=True, hide_index=True)
     else:
         st.info("Aucun OF Consommable au statut 'Terminé' pour le calcul des KPIs.")
 
@@ -583,7 +578,7 @@ with onglets[1]:
             st.metric(f"Année {annee_courante} (YTD)", f"{qte_ytd_se} unités")
 
         st.markdown("##### Historique détaillé des Sous-ensembles terminés")
-        st.dataframe(df_ts[["id_plan", "sous_ensemble", "quantite", "assigne", "date_fin_cascade", "priorite"]], use_countainer_width=True, hide_index=True)
+        st.dataframe(df_ts[["id_plan", "sous_ensemble", "quantite", "assigne", "date_fin_cascade", "priorite"]], use_container_width=True, hide_index=True)
     else:
         st.info("Aucun OF Sous-ensemble au statut 'Terminé' pour le calcul des KPIs.")
 
