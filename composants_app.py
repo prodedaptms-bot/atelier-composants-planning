@@ -156,6 +156,7 @@ st.markdown("---")
 
 onglets = st.tabs([
     "📊 Tableau de Bord",
+    "📈 KPIs & Indicateurs",
     "⚙️ Création Sous-ensembles",
     "📦 Références Consommables",
     "📅 Planification & Cascade",
@@ -406,7 +407,6 @@ with onglets[0]:
                 tech = x.get('assigne', 'Non assigné')
                 prio = x.get('priorite', 'Normale')
                 
-                # Icône / couleur associée au technicien
                 couleur_tech = tech_couleur_map.get(tech, "⚪")
                 symb_prio = "🔥" if prio == "Urgente" else ("⚡" if prio == "Haute" else "🔹")
                 
@@ -418,7 +418,6 @@ with onglets[0]:
                     j_str = str(j)
                     col_nom = j.strftime("%a %d/%m")
                     if d_deb and d_fin and d_deb <= j_str <= d_fin:
-                        # On utilise la couleur du tech comme bloc visuel si possible, ou un bloc textuel coloré
                         ligne[col_nom] = f"{couleur_tech}████"
                     else:
                         ligne[col_nom] = "·"
@@ -497,8 +496,100 @@ with onglets[0]:
         st.info("Aucun OF Consommable enregistré.")
 
 
-# --- ONGLET 2 : CRÉATION SOUS-ENSEMBLES ---
+# --- ONGLET 1.5 : KPIS & INDICATEURS ---
 with onglets[1]:
+    st.header("📈 KPIs & Indicateurs de Production (Mise en stock)")
+    st.markdown("Suivi des volumes produits et mis en stock (basé sur les OFs au statut **Terminé**).")
+
+    # On fusionne / traite les OFs terminés des deux catégories
+    # Pour l'historique, on regarde les plannings enregistrés ayant le statut "Terminé"
+    termines_se = [p for p in plannings_se if p.get("statut") == "Terminé"]
+    termines_cons = [p for p in plannings_cons if p.get("statut") == "Terminé"]
+
+    st.subheader("📦 Consommables mis en stock")
+    if termines_cons:
+        df_tc = pd.DataFrame(termines_cons)
+        # On s'assure d'avoir une date de fin ou de référence (on utilise date_lancement ou date_fin_cascade si dispo)
+        if "date_fin_cascade" not in df_tc.columns:
+            df_tc["date_fin_cascade"] = df_tc.get("date_lancement", str(auj))
+        
+        df_tc["date_ref"] = pd.to_datetime(df_tc["date_fin_cascade"].astype(str).str[:10], errors="coerce").dt.date
+        df_tc = df_tc.dropna(subset=["date_ref"])
+
+        # Calculs par semaine, mois, YTD
+        annee_courante = auj.year
+        
+        # Filtrage par période par rapport à la date du jour auj
+        semaine_actuelle_num = auj.isocalendar()[1]
+        
+        qte_semaine_cons = 0
+        qte_mois_cons = 0
+        qte_ytd_cons = 0
+
+        for _, r in df_tc.iterrows():
+            d = r["date_ref"]
+            q = r.get("quantite", 0)
+            if d.year == annee_courante:
+                qte_ytd_cons += q
+                if d.month == auj.month:
+                    qte_mois_cons += q
+                if d.isocalendar()[1] == semaine_actuelle_num:
+                    qte_semaine_cons += q
+
+        kpi_c1, kpi_c2, kpi_c3 = st.columns(3)
+        with kpi_c1:
+            st.metric("Semaine en cours", f"{qte_semaine_cons} unités")
+        with kpi_c2:
+            st.metric("Mois en cours", f"{qte_mois_cons} unités")
+        with kpi_c3:
+            st.metric(f"Année {annee_courante} (YTD)", f"{qte_ytd_cons} unités")
+
+        st.markdown("##### Historique détaillé des Consommables terminés")
+        st.dataframe(df_tc[["id_plan", "consommable", "quantite", "assigne", "date_fin_cascade", "priorite"]], use_countainer_width=True, hide_index=True)
+    else:
+        st.info("Aucun OF Consommable au statut 'Terminé' pour le calcul des KPIs.")
+
+    st.markdown("---")
+
+    st.subheader("🛠️ Sous-ensembles mis en stock")
+    if termines_se:
+        df_ts = pd.DataFrame(termines_se)
+        if "date_fin_cascade" not in df_ts.columns:
+            df_ts["date_fin_cascade"] = df_ts.get("date_lancement", str(auj))
+        
+        df_ts["date_ref"] = pd.to_datetime(df_ts["date_fin_cascade"].astype(str).str[:10], errors="coerce").dt.date
+        df_ts = df_ts.dropna(subset=["date_ref"])
+
+        qte_semaine_se = 0
+        qte_mois_se = 0
+        qte_ytd_se = 0
+
+        for _, r in df_ts.iterrows():
+            d = r["date_ref"]
+            q = r.get("quantite", 0)
+            if d.year == annee_courante:
+                qte_ytd_se += q
+                if d.month == auj.month:
+                    qte_mois_se += q
+                if d.isocalendar()[1] == semaine_actuelle_num:
+                    qte_semaine_se += q
+
+        kpi_s1, kpi_s2, kpi_s3 = st.columns(3)
+        with kpi_s1:
+            st.metric("Semaine en cours", f"{qte_semaine_se} unités")
+        with kpi_s2:
+            st.metric("Mois en cours", f"{qte_mois_se} unités")
+        with kpi_s3:
+            st.metric(f"Année {annee_courante} (YTD)", f"{qte_ytd_se} unités")
+
+        st.markdown("##### Historique détaillé des Sous-ensembles terminés")
+        st.dataframe(df_ts[["id_plan", "sous_ensemble", "quantite", "assigne", "date_fin_cascade", "priorite"]], use_countainer_width=True, hide_index=True)
+    else:
+        st.info("Aucun OF Sous-ensemble au statut 'Terminé' pour le calcul des KPIs.")
+
+
+# --- ONGLET 2 : CRÉATION SOUS-ENSEMBLES ---
+with onglets[2]:
     st.header("⚙️ Gestion & Création des Sous-ensembles")
 
     with st.form("form_creer_se"):
@@ -553,7 +644,7 @@ with onglets[1]:
 
 
 # --- ONGLET 3 : RÉFÉRENCES CONSOMMABLES ---
-with onglets[2]:
+with onglets[3]:
     st.header("📦 Gestion & Références des Consommables")
 
     with st.form("form_creer_cons"):
@@ -639,7 +730,7 @@ with onglets[2]:
 
 
 # --- ONGLET 4 : PLANIFICATION & CASCADE ---
-with onglets[3]:
+with onglets[4]:
     st.header("📅 Ordonnancement en Cascade & Vues Gantt Semaine")
 
     sub_tab1, sub_tab2, sub_tab_cascade, sub_tab_gantt_couleurs = st.tabs([
@@ -848,7 +939,7 @@ with onglets[3]:
 
 
 # --- ONGLET 5 : ÉQUIPE ---
-with onglets[4]:
+with onglets[5]:
     st.header("👥 Gestion des Équipes")
     col_eq1, col_eq2 = st.columns(2)
     with col_eq1:
@@ -880,7 +971,7 @@ with onglets[4]:
 
 
 # --- ONGLET 6 : CONGÉS & ABSENCES ---
-with onglets[5]:
+with onglets[6]:
     st.header("🌴 Congés & Absences")
     c_ab1, c_ab2 = st.columns(2)
     
@@ -971,7 +1062,7 @@ with onglets[5]:
 
 
 # --- ONGLET 7 : SAUVEGARDE & DONNÉES ---
-with onglets[6]:
+with onglets[7]:
     st.header("💾 Sauvegarde, Restauration & Données Brutes")
 
     st.subheader("📥 Export global de la base de données")
