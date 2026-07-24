@@ -257,7 +257,6 @@ with onglets[0]:
         if not df_synth_actifs.empty and "date_debut_cascade" in df_synth_actifs.columns:
             lignes_ventilees = []
             
-            # Reconstruction du dictionnaire d'absences global pour la ventilation
             abs_par_tech_synth = {}
             for abs_rec in absences_prod + absences_cons:
                 tech = abs_rec.get("technicien")
@@ -355,7 +354,7 @@ with onglets[0]:
     
     st.markdown("---")
 
-    # --- SOUS-ENSEMBLES : Tableau + Mini-Gantt ---
+    # --- SOUS-ENSEMBLES : Tableau + Mini-Gantt Sexy ---
     st.subheader("🛠️ Suivi détaillé des OFs Sous-ensembles (avec Cascade)")
     if ofs_se_cascade:
         df_dashboard_se = pd.DataFrame(ofs_se_cascade)
@@ -369,25 +368,51 @@ with onglets[0]:
             key="exp_dash_se",
         )
 
-        # Mini-Gantt Sous-ensembles
-        st.markdown("##### 📅 Visualisation Gantt (Semaine SE)")
+        # Mini-Gantt Sous-ensembles (Sexy & Dynamique)
+        st.markdown("##### 📅 Planning Visuel (Gantt Dynamique SE)")
         actifs_se = [x for x in ofs_se_cascade if x.get("statut") not in ["Terminé", "Supprimé"]]
         if actifs_se:
-            jours_semaine = [debut_semaine + timedelta(days=i) for i in range(5)]
+            # Recherche de la date de lancement de l'OF le plus ancien en cours
+            toutes_dates = []
+            for x in actifs_se:
+                d_str = x.get("date_debut_cascade")
+                if d_str:
+                    try:
+                        toutes_dates.append(datetime.strptime(str(d_str)[:10], "%Y-%m-%d").date())
+                    except:
+                        pass
+            
+            date_debut_gantt = min(toutes_dates) if toutes_dates else auj
+            # Exclure le week-end pour démarrer sur un jour ouvré
+            while date_debut_gantt.weekday() >= 5:
+                date_debut_gantt += timedelta(days=1)
+
+            # Génération de 10 jours ouvrés glissants
+            jours_gantt = []
+            curr_g = date_debut_gantt
+            while len(jours_gantt) < 10:
+                if curr_g.weekday() < 5:
+                    jours_gantt.append(curr_g)
+                curr_g += timedelta(days=1)
+
             lignes_gantt_se = []
             for x in actifs_se:
                 nom_op = x.get('sous_ensemble', 'OF')
                 tech = x.get('assigne', 'Non assigné')
-                ligne = {"OF / Tech": f"{nom_op} ({tech})"}
+                prio = x.get('priorite', 'Normale')
+                symb_prio = "🔥" if prio == "Urgente" else ("⚡" if prio == "Haute" else "🔹")
+                
+                ligne = {"OF / Tech": f"{symb_prio} {nom_op} ({tech})"}
                 d_deb = x.get("date_debut_cascade", "")
                 d_fin = x.get("date_fin_cascade", "")
                 
-                for j in jours_semaine:
+                for j in jours_gantt:
                     j_str = str(j)
+                    col_nom = j.strftime("%a %d/%m")
                     if d_deb and d_fin and d_deb <= j_str <= d_fin:
-                        ligne[j.strftime("%a %d/%m")] = "█ █ █"
+                        ligne[col_nom] = "██████"
                     else:
-                        ligne[j.strftime("%a %d/%m")] = ""
+                        ligne[col_nom] = "·"
                 lignes_gantt_se.append(ligne)
             st.dataframe(pd.DataFrame(lignes_gantt_se), use_container_width=True, hide_index=True)
         else:
@@ -397,7 +422,7 @@ with onglets[0]:
 
     st.markdown("---")
 
-    # --- CONSOMMABLES : Tableau + Mini-Gantt ---
+    # --- CONSOMMABLES : Tableau + Mini-Gantt Sexy ---
     st.subheader("📦 Suivi détaillé des OFs Consommables (avec Cascade)")
     if ofs_cons_cascade:
         df_dashboard_cons = pd.DataFrame(ofs_cons_cascade)
@@ -411,25 +436,48 @@ with onglets[0]:
             key="exp_dash_cons",
         )
 
-        # Mini-Gantt Consommables
-        st.markdown("##### 📅 Visualisation Gantt (Semaine Consommables)")
+        # Mini-Gantt Consommables (Sexy & Dynamique)
+        st.markdown("##### 📅 Planning Visuel (Gantt Dynamique Consommables)")
         actifs_cons = [x for x in ofs_cons_cascade if x.get("statut") not in ["Terminé", "Supprimé"]]
         if actifs_cons:
-            jours_semaine = [debut_semaine + timedelta(days=i) for i in range(5)]
+            toutes_dates_c = []
+            for x in actifs_cons:
+                d_str = x.get("date_debut_cascade")
+                if d_str:
+                    try:
+                        toutes_dates_c.append(datetime.strptime(str(d_str)[:10], "%Y-%m-%d").date())
+                    except:
+                        pass
+            
+            date_debut_gantt_c = min(toutes_dates_c) if toutes_dates_c else auj
+            while date_debut_gantt_c.weekday() >= 5:
+                date_debut_gantt_c += timedelta(days=1)
+
+            jours_gantt_c = []
+            curr_gc = date_debut_gantt_c
+            while len(jours_gantt_c) < 10:
+                if curr_gc.weekday() < 5:
+                    jours_gantt_c.append(curr_gc)
+                curr_gc += timedelta(days=1)
+
             lignes_gantt_cons = []
             for x in actifs_cons:
                 nom_op = x.get('consommable', 'OF')
                 tech = x.get('assigne', 'Non assigné')
-                ligne = {"OF / Tech": f"{nom_op} ({tech})"}
+                prio = x.get('priorite', 'Normale')
+                symb_prio = "🔥" if prio == "Urgente" else ("⚡" if prio == "Haute" else "🔹")
+                
+                ligne = {"OF / Tech": f"{symb_prio} {nom_op} ({tech})"}
                 d_deb = x.get("date_debut_cascade", "")
                 d_fin = x.get("date_fin_cascade", "")
                 
-                for j in jours_semaine:
+                for j in jours_gantt_c:
                     j_str = str(j)
+                    col_nom = j.strftime("%a %d/%m")
                     if d_deb and d_fin and d_deb <= j_str <= d_fin:
-                        ligne[j.strftime("%a %d/%m")] = "█ █ █"
+                        ligne[col_nom] = "██████"
                     else:
-                        ligne[j.strftime("%a %d/%m")] = ""
+                        ligne[col_nom] = "·"
                 lignes_gantt_cons.append(ligne)
             st.dataframe(pd.DataFrame(lignes_gantt_cons), use_container_width=True, hide_index=True)
         else:
