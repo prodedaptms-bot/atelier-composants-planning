@@ -447,7 +447,7 @@ with onglets[0]:
 
         # Mini-Gantt Consommables (Ciblé & Coloré par Technicien)
         st.markdown("##### 📅 Planning Visuel (Gantt Dynamique Consommables)")
-        actifs_cons = [x for x in ofs_cons_cascade if x.get("statut"] not in ["Terminé", "Supprimé"]]
+        actifs_cons = [x for x in ofs_cons_cascade if x.get("statut") not in ["Terminé", "Supprimé"]]
         if actifs_cons:
             toutes_dates_c = []
             for x in actifs_cons:
