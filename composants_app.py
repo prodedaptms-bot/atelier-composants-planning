@@ -196,6 +196,14 @@ charge_restante_cons_h = sum(
 capacite_dispo_prod_h = len(techniciens_prod) * CAPACITE_HEBDO
 capacite_dispo_cons_h = len(techniciens_cons) * CAPACITE_HEBDO
 
+# --- MAPPE DE COULEURS PAR TECHNICIEN ---
+tous_techniciens_noms = [t["nom"] for t in techniciens_prod + techniciens_cons]
+palette_icones_tech = ["🔵", "🟢", "🟠", "🟣", "🔴", "🟤", "🟡", "🔷", "🟩", "🟧"]
+tech_couleur_map = {
+    tech: palette_icones_tech[i % len(palette_icones_tech)]
+    for i, tech in enumerate(tous_techniciens_noms)
+}
+
 
 # --- ONGLET 1 : TABLEAU DE BORD ---
 with onglets[0]:
@@ -354,7 +362,7 @@ with onglets[0]:
     
     st.markdown("---")
 
-    # --- SOUS-ENSEMBLES : Tableau + Mini-Gantt Sexy ---
+    # --- SOUS-ENSEMBLES : Tableau + Mini-Gantt Sexy & Coloré ---
     st.subheader("🛠️ Suivi détaillé des OFs Sous-ensembles (avec Cascade)")
     if ofs_se_cascade:
         df_dashboard_se = pd.DataFrame(ofs_se_cascade)
@@ -368,11 +376,10 @@ with onglets[0]:
             key="exp_dash_se",
         )
 
-        # Mini-Gantt Sous-ensembles (Sexy & Dynamique)
+        # Mini-Gantt Sous-ensembles (Ciblé & Coloré par Technicien)
         st.markdown("##### 📅 Planning Visuel (Gantt Dynamique SE)")
         actifs_se = [x for x in ofs_se_cascade if x.get("statut") not in ["Terminé", "Supprimé"]]
         if actifs_se:
-            # Recherche de la date de lancement de l'OF le plus ancien en cours
             toutes_dates = []
             for x in actifs_se:
                 d_str = x.get("date_debut_cascade")
@@ -383,11 +390,9 @@ with onglets[0]:
                         pass
             
             date_debut_gantt = min(toutes_dates) if toutes_dates else auj
-            # Exclure le week-end pour démarrer sur un jour ouvré
             while date_debut_gantt.weekday() >= 5:
                 date_debut_gantt += timedelta(days=1)
 
-            # Génération de 10 jours ouvrés glissants
             jours_gantt = []
             curr_g = date_debut_gantt
             while len(jours_gantt) < 10:
@@ -400,9 +405,12 @@ with onglets[0]:
                 nom_op = x.get('sous_ensemble', 'OF')
                 tech = x.get('assigne', 'Non assigné')
                 prio = x.get('priorite', 'Normale')
+                
+                # Icône / couleur associée au technicien
+                couleur_tech = tech_couleur_map.get(tech, "⚪")
                 symb_prio = "🔥" if prio == "Urgente" else ("⚡" if prio == "Haute" else "🔹")
                 
-                ligne = {"OF / Tech": f"{symb_prio} {nom_op} ({tech})"}
+                ligne = {"OF / Tech": f"{couleur_tech} {symb_prio} {nom_op} ({tech})"}
                 d_deb = x.get("date_debut_cascade", "")
                 d_fin = x.get("date_fin_cascade", "")
                 
@@ -410,7 +418,8 @@ with onglets[0]:
                     j_str = str(j)
                     col_nom = j.strftime("%a %d/%m")
                     if d_deb and d_fin and d_deb <= j_str <= d_fin:
-                        ligne[col_nom] = "██████"
+                        # On utilise la couleur du tech comme bloc visuel si possible, ou un bloc textuel coloré
+                        ligne[col_nom] = f"{couleur_tech}████"
                     else:
                         ligne[col_nom] = "·"
                 lignes_gantt_se.append(ligne)
@@ -422,7 +431,7 @@ with onglets[0]:
 
     st.markdown("---")
 
-    # --- CONSOMMABLES : Tableau + Mini-Gantt Sexy ---
+    # --- CONSOMMABLES : Tableau + Mini-Gantt Sexy & Coloré ---
     st.subheader("📦 Suivi détaillé des OFs Consommables (avec Cascade)")
     if ofs_cons_cascade:
         df_dashboard_cons = pd.DataFrame(ofs_cons_cascade)
@@ -436,9 +445,9 @@ with onglets[0]:
             key="exp_dash_cons",
         )
 
-        # Mini-Gantt Consommables (Sexy & Dynamique)
+        # Mini-Gantt Consommables (Ciblé & Coloré par Technicien)
         st.markdown("##### 📅 Planning Visuel (Gantt Dynamique Consommables)")
-        actifs_cons = [x for x in ofs_cons_cascade if x.get("statut") not in ["Terminé", "Supprimé"]]
+        actifs_cons = [x for x in ofs_cons_cascade if x.get("statut"] not in ["Terminé", "Supprimé"]]
         if actifs_cons:
             toutes_dates_c = []
             for x in actifs_cons:
@@ -465,9 +474,11 @@ with onglets[0]:
                 nom_op = x.get('consommable', 'OF')
                 tech = x.get('assigne', 'Non assigné')
                 prio = x.get('priorite', 'Normale')
+                
+                couleur_tech = tech_couleur_map.get(tech, "⚪")
                 symb_prio = "🔥" if prio == "Urgente" else ("⚡" if prio == "Haute" else "🔹")
                 
-                ligne = {"OF / Tech": f"{symb_prio} {nom_op} ({tech})"}
+                ligne = {"OF / Tech": f"{couleur_tech} {symb_prio} {nom_op} ({tech})"}
                 d_deb = x.get("date_debut_cascade", "")
                 d_fin = x.get("date_fin_cascade", "")
                 
@@ -475,7 +486,7 @@ with onglets[0]:
                     j_str = str(j)
                     col_nom = j.strftime("%a %d/%m")
                     if d_deb and d_fin and d_deb <= j_str <= d_fin:
-                        ligne[col_nom] = "██████"
+                        ligne[col_nom] = f"{couleur_tech}████"
                     else:
                         ligne[col_nom] = "·"
                 lignes_gantt_cons.append(ligne)
@@ -780,23 +791,7 @@ with onglets[3]:
         )
 
         tous_techs = [t["nom"] for t in techniciens_prod + techniciens_cons]
-        palette_couleurs = [
-            "🔵",
-            "🟢",
-            "🟠",
-            "🟣",
-            "🔴",
-            "🟤",
-            "🟡",
-            "🔷",
-            "🟩",
-            "🟧",
-        ]
-        tech_couleur_map = {
-            tech: palette_couleurs[i % len(palette_couleurs)]
-            for i, tech in enumerate(tous_techs)
-        }
-
+        
         st.markdown("**Légende des techniciens :**")
         légende_markdown = " | ".join([
             f"{couleur} **{tech}**" for tech, couleur in tech_couleur_map.items()
