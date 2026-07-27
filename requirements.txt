@@ -1,8 +1,3 @@
 streamlit
-gspread
-google-auth
 pandas
-Pillow
-Plotly
-streamlit-gsheets
 openpyxl
