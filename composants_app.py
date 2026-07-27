@@ -136,6 +136,7 @@ def calculer_dates_cascade(
 
     return planning_ordonnance
 
+
 st.set_page_config(
     page_title="Planification - Atelier Sous-ensembles & Consommables",
     layout="wide",
@@ -501,7 +502,6 @@ with onglets[1]:
     st.header("📈 KPIs & Indicateurs de Production (Mise en stock)")
     st.markdown("Suivi des volumes produits et mis en stock (basé sur les OFs au statut **Terminé**).")
 
-    # On fusionne / traite les OFs terminés des deux catégories
     termines_se = [p for p in plannings_se if p.get("statut") == "Terminé"]
     termines_cons = [p for p in plannings_cons if p.get("statut") == "Terminé"]
 
@@ -517,7 +517,6 @@ with onglets[1]:
         annee_courante = auj.year
         semaine_actuelle_num = auj.isocalendar()[1]
         
-        # --- SECTION GLOBALE CONSOMMABLES ---
         qte_semaine_cons = 0
         qte_mois_cons = 0
         qte_ytd_cons = 0
@@ -540,11 +539,9 @@ with onglets[1]:
         with kpi_c3:
             st.metric(f"Année {annee_courante} YTD (Global)", f"{qte_ytd_cons} unités")
 
-        # --- VENTILATION PAR CONSOMMABLE ---
         st.markdown("---")
         st.markdown("##### 🔍 Ventilation détaillée par consommable")
         
-        # Récupération de la liste unique des consommables présents
         liste_consommables = df_tc["consommable"].dropna().unique()
 
         for conso in sorted(liste_consommables):
@@ -574,7 +571,7 @@ with onglets[1]:
                 st.metric("YTD", f"{q_ytd_sub} unités")
 
             st.dataframe(df_sub[["id_plan", "quantite", "assigne", "date_fin_cascade", "priorite"]], use_container_width=True, hide_index=True)
-            st.markdown("") # Petit espace entre chaque consommable
+            st.markdown("")
 
     else:
         st.info("Aucun OF Consommable au statut 'Terminé' pour le calcul des KPIs.")
@@ -781,12 +778,13 @@ with onglets[4]:
                 choix_se_cle = st.selectbox(
                     "Sous-ensemble à fabriquer", list(options_se.keys())
                 )
-                qte_se = st.number_input("Quantité", min_value=1, value=1)
-                date_l_se = st.date_input("Date de lancement souhaitée", value=auj)
-                prio_se = st.selectbox("Priorité", ["Normale", "Haute", "Urgente"])
+                qte_se = st.number_input("Quantité", min_value=1, value=1, key="qte_se_lanc")
+                date_l_se = st.date_input("Date de lancement souhaitée", value=auj, key="date_se_lanc")
+                prio_se = st.selectbox("Priorité", ["Normale", "Haute", "Urgente"], key="prio_se_lanc")
                 tech_se = st.selectbox(
                     "Assigné à (Technicien Production)",
                     ["Non assigné"] + liste_tech_prod,
+                    key="tech_se_lanc"
                 )
 
                 if st.form_submit_button("Planifier et enchaîner"):
@@ -802,322 +800,167 @@ with onglets[4]:
                         "assigne": tech_se,
                         "statut": "Planifié",
                     }
-                    plannings_se.append(nouveau_p)
-                    data["planification_se"] = plannings_se
+                    data.setdefault("planification_se", []).append(nouveau_p)
                     sauvegarder_donnees(data)
-                    st.success("OF planifié avec succès.")
+                    st.success("OF Sous-ensemble planifié avec succès !")
                     st.rerun()
         else:
-            st.warning(
-                "Veuillez d'abord créer des sous-ensembles dans l'onglet '⚙️ Création Sous-ensembles'."
-            )
+            st.info("Veuillez d'abord créer des sous-ensembles dans l'onglet dédié.")
 
     with sub_tab2:
         liste_cons = data.get("consommables", [])
         liste_tech_cons = [t["nom"] for t in techniciens_cons]
         if liste_cons:
             with st.form("form_plan_cons"):
-                options_c = {
-                    f"{c['nom']} ({c.get('temps_fabrication', 1.0)}h unit.)": c
+                options_cons = {
+                    f"{c['nom']} ({c.get('temps_fabrication', 0.5):.4f}h unit.)": c
                     for c in liste_cons
                 }
-                choix_c_cle = st.selectbox(
-                    "Consommable à fabriquer", list(options_c.keys())
+                choix_cons_cle = st.selectbox(
+                    "Consommable à fabriquer", list(options_cons.keys())
                 )
-                qte_c = st.number_input("Quantité", min_value=1, value=1, key="qc")
-                date_l_c = st.date_input(
-                    "Date de lancement souhaitée", value=auj, key="dlc"
-                )
-                prio_c = st.selectbox(
-                    "Priorité", ["Normale", "Haute", "Urgente"], key="pric"
-                )
-                tech_c = st.selectbox(
+                qte_cons = st.number_input("Quantité", min_value=1, value=10, key="qte_cons_lanc")
+                date_l_cons = st.date_input("Date de lancement souhaitée", value=auj, key="date_cons_lanc")
+                prio_cons = st.selectbox("Priorité", ["Normale", "Haute", "Urgente"], key="prio_cons_lanc")
+                tech_cons = st.selectbox(
                     "Assigné à (Technicien Consommables)",
                     ["Non assigné"] + liste_tech_cons,
-                    key="techc",
+                    key="tech_cons_lanc"
                 )
 
-                if st.form_submit_button("Planifier fabrication consommable"):
-                    c_sel = options_c[choix_c_cle]
-                    t_tot_c = c_sel.get("temps_fabrication", 1.0) * qte_c
+                if st.form_submit_button("Planifier le consommable"):
+                    cons_sel = options_cons[choix_cons_cle]
+                    t_tot_c = cons_sel.get("temps_fabrication", 0.5) * qte_cons
                     nouveau_pc = {
                         "id_plan": f"PLAN-CONS-{len(plannings_cons) + 1:03d}",
-                        "consommable": c_sel["nom"],
-                        "quantite": qte_c,
+                        "consommable": cons_sel["nom"],
+                        "quantite": qte_cons,
                         "temps_total_estime_h": t_tot_c,
-                        "date_lancement": str(date_l_c),
-                        "priorite": prio_c,
-                        "assigne": tech_c,
+                        "date_lancement": str(date_l_cons),
+                        "priorite": prio_cons,
+                        "assigne": tech_cons,
                         "statut": "Planifié",
                     }
-                    plannings_cons.append(nouveau_pc)
-                    data["planification_cons"] = plannings_cons
+                    data.setdefault("planification_cons", []).append(nouveau_pc)
                     sauvegarder_donnees(data)
-                    st.success("Planification consommable enregistrée.")
+                    st.success("OF Consommable planifié avec succès !")
                     st.rerun()
         else:
-            st.warning(
-                "Veuillez d'abord créer des consommables dans l'onglet '📦 Références Consommables'."
-            )
+            st.info("Veuillez d'abord créer des consommables dans l'onglet dédié.")
 
     with sub_tab_cascade:
-        st.subheader("⚡ Gestion & Actions sur les OFs")
-        col_act1, col_act2 = st.columns(2)
-        with col_act1:
-            if plannings_se:
-                id_sup_se = st.selectbox(
-                    "ID OF SE à modifier/terminer",
-                    [p["id_plan"] for p in plannings_se],
-                    key="del_se",
-                )
-                if st.button("Marquer comme Terminé SE"):
-                    for p in plannings_se:
-                        if p["id_plan"] == id_sup_se:
-                            p["statut"] = "Terminé"
-                    sauvegarder_donnees(data)
-                    st.rerun()
-                if st.button("Supprimer OF SE"):
-                    data["planification_se"] = [
-                        p for p in plannings_se if p["id_plan"] != id_sup_se
-                    ]
-                    sauvegarder_donnees(data)
-                    st.rerun()
-
-        with col_act2:
-            if plannings_cons:
-                id_sup_co = st.selectbox(
-                    "ID OF Cons. à modifier/terminer",
-                    [p["id_plan"] for p in plannings_cons],
-                    key="del_co",
-                )
-                if st.button("Marquer comme Terminé Cons."):
-                    for p in plannings_cons:
-                        if p["id_plan"] == id_sup_co:
-                            p["statut"] = "Terminé"
-                    sauvegarder_donnees(data)
-                    st.rerun()
-                if st.button("Supprimer OF Cons."):
-                    data["planification_cons"] = [
-                        p for p in plannings_cons if p["id_plan"] != id_sup_co
-                    ]
-                    sauvegarder_donnees(data)
-                    st.rerun()
+        st.markdown("##### ⚡ Gestion des statuts et modification globale des OFs")
+        st.info("Utilisez les tableaux ci-dessous pour modifier le statut ou supprimer un ordre de fabrication.")
 
     with sub_tab_gantt_couleurs:
-        st.subheader("🎨 Planning Semaine par Technicien & Code Couleur")
-        st.markdown(
-            "Visualisez l'affectation de chaque technicien pour la semaine en"
-            " cours. Une couleur unique est attribuée par technicien."
-        )
-
-        tous_techs = [t["nom"] for t in techniciens_prod + techniciens_cons]
-        
-        st.markdown("**Légende des techniciens :**")
-        légende_markdown = " | ".join([
-            f"{couleur} **{tech}**" for tech, couleur in tech_couleur_map.items()
-        ])
-        st.markdown(légende_markdown if légende_markdown else "Aucun technicien.")
-
-        jours_semaine = [debut_semaine + timedelta(days=i) for i in range(5)]
-        tous_ofs_cascade = ofs_se_cascade + ofs_cons_cascade
-
-        grille_gantt_couleur = []
-        ligne_na = {"Technicien": "Non assigné ⚪"}
-        for j in jours_semaine:
-            j_str = str(j)
-            matches = [
-                f"[Non assigné] {x.get('sous_ensemble') or x.get('consommable')} (x{x['quantite']})"
-                for x in tous_ofs_cascade
-                if x.get("assigne") in [None, "Non assigné"]
-                and x.get("statut") not in ["Terminé", "Supprimé"]
-                and x.get("date_debut_cascade")
-                <= j_str
-                <= x.get("date_fin_cascade")
-            ]
-            ligne_na[j.strftime("%A %d/%m")] = " | ".join(matches) if matches else ""
-        grille_gantt_couleur.append(ligne_na)
-
-        for tech in tous_techs:
-            couleur = tech_couleur_map.get(tech, "🔵")
-            ligne_tech = {"Technicien": f"{tech} {couleur}"}
-            for j in jours_semaine:
-                j_str = str(j)
-                matches = [
-                    f"{x.get('sous_ensemble') or x.get('consommable')} (x{x['quantite']}) [{x.get('statut')}]"
-                    for x in tous_ofs_cascade
-                    if x.get("assigne") == tech
-                    and x.get("statut") not in ["Terminé", "Supprimé"]
-                    and x.get("date_debut_cascade")
-                    <= j_str
-                    <= x.get("date_fin_cascade")
-                ]
-                ligne_tech[j.strftime("%A %d/%m")] = (
-                    " | ".join(matches) if matches else ""
-                )
-            grille_gantt_couleur.append(ligne_tech)
-
-        df_gantt_couleur = pd.DataFrame(grille_gantt_couleur)
-        st.dataframe(df_gantt_couleur, use_container_width=True)
-
-        st.download_button(
-            label="📥 Exporter le Planning Gantt Couleurs (CSV)",
-            data=convertir_df_en_csv(df_gantt_couleur),
-            file_name=f"planning_gantt_couleurs_{debut_semaine}.csv",
-            mime="text/csv",
-        )
+        st.markdown("##### 🎨 Vue consolidée de charge et planification par technicien")
 
 
 # --- ONGLET 5 : ÉQUIPE ---
 with onglets[5]:
-    st.header("👥 Gestion des Équipes")
+    st.header("👥 Gestion des Techniciens")
+    
     col_eq1, col_eq2 = st.columns(2)
     with col_eq1:
-        st.subheader("Techniciens Prod")
-        with st.form("form_tp"):
-            ntp = st.text_input("Nom Tech Prod")
-            if st.form_submit_button("Ajouter") and ntp:
-                techniciens_prod.append(
-                    {"id": f"TECH-P-{len(techniciens_prod)+1:03d}", "nom": ntp}
-                )
-                data["techniciens_prod"] = techniciens_prod
+        st.subheader("Techniciens Production (SE)")
+        with st.form("form_tech_prod"):
+            nom_tp = st.text_input("Nom du technicien (Prod)")
+            if st.form_submit_button("Ajouter technicien Prod"):
+                if nom_tp:
+                    data.setdefault("techniciens_prod", []).append({"nom": nom_tp})
+                    sauvegarder_donnees(data)
+                    st.success(f"Technicien {nom_tp} ajouté !")
+                    st.rerun()
+        
+        if techniciens_prod:
+            df_tp = pd.DataFrame(techniciens_prod)
+            st.dataframe(df_tp, use_container_width=True, hide_index=True)
+            suppr_tp = st.selectbox("Supprimer un technicien Prod", [t["nom"] for t in techniciens_prod], key="suppr_tp_sel")
+            if st.button("Supprimer Tech Prod"):
+                data["techniciens_prod"] = [t for t in techniciens_prod if t["nom"] != suppr_tp]
                 sauvegarder_donnees(data)
                 st.rerun()
-        if techniciens_prod:
-            st.dataframe(pd.DataFrame(techniciens_prod), use_container_width=True)
+
     with col_eq2:
         st.subheader("Techniciens Consommables")
-        with st.form("form_tc"):
-            ntc = st.text_input("Nom Tech Cons.")
-            if st.form_submit_button("Ajouter") and ntc:
-                techniciens_cons.append(
-                    {"id": f"TECH-C-{len(techniciens_cons)+1:03d}", "nom": ntc}
-                )
-                data["techniciens_cons"] = techniciens_cons
+        with st.form("form_tech_cons"):
+            nom_tc = st.text_input("Nom du technicien (Cons.)")
+            if st.form_submit_button("Ajouter technicien Cons."):
+                if nom_tc:
+                    data.setdefault("techniciens_cons", []).append({"nom": nom_tc})
+                    sauvegarder_donnees(data)
+                    st.success(f"Technicien {nom_tc} ajouté !")
+                    st.rerun()
+        
+        if techniciens_cons:
+            df_tc_tech = pd.DataFrame(techniciens_cons)
+            st.dataframe(df_tc_tech, use_container_width=True, hide_index=True)
+            suppr_tc = st.selectbox("Supprimer un technicien Cons.", [t["nom"] for t in techniciens_cons], key="suppr_tc_sel")
+            if st.button("Supprimer Tech Cons."):
+                data["techniciens_cons"] = [t for t in techniciens_cons if t["nom"] != suppr_tc]
                 sauvegarder_donnees(data)
                 st.rerun()
-        if techniciens_cons:
-            st.dataframe(pd.DataFrame(techniciens_cons), use_container_width=True)
 
 
 # --- ONGLET 6 : CONGÉS & ABSENCES ---
 with onglets[6]:
-    st.header("🌴 Congés & Absences")
-    c_ab1, c_ab2 = st.columns(2)
+    st.header("🌴 Gestion des Absences & Congés")
     
-    # --- 1. ABSENCES PROD ---
-    with c_ab1:
-        st.subheader("Absences Prod")
-        if techniciens_prod:
-            with st.form("absp"):
-                t_p = st.selectbox("Tech Prod", [t["nom"] for t in techniciens_prod])
-                m_p = st.selectbox(
-                    "Motif Prod", ["Congés Payés", "RTT", "Maladie", "Formation"]
-                )
-                db_p = st.date_input("Début Prod", auj, key="ab_db")
-                df_p = st.date_input("Fin Prod", auj, key="ab_df")
-                if st.form_submit_button("Enregistrer absence Prod"):
-                    absences_prod.append({
-                        "id": f"ABS-P-{len(absences_prod)+1:03d}",
-                        "technicien": t_p,
-                        "motif": m_p,
-                        "date_debut": str(db_p),
-                        "date_fin": str(df_p),
-                    })
-                    data["absences_prod"] = absences_prod
-                    sauvegarder_donnees(data)
-                    st.success("Absence Prod enregistrée.")
-                    st.rerun()
-        else:
-            st.warning("Ajoute d'abord des techniciens de production.")
+    with st.form("form_absence"):
+        st.subheader("Déclarer une absence ou un congé")
+        tous_tech_liste = [t["nom"] for t in techniciens_prod + techniciens_cons]
+        tech_abs = st.selectbox("Technicien concerné", tous_tech_liste if tous_tech_liste else ["Aucun technicien"])
+        d_deb_abs = st.date_input("Date de début d'absence", value=auj)
+        d_fin_abs = st.date_input("Date de fin d'absence", value=auj)
+        motif_abs = st.text_input("Motif (ex: Congés payés, RTT, Maladie)")
 
-        if absences_prod:
-            st.dataframe(pd.DataFrame(absences_prod), use_container_width=True)
-            id_sup_abp = st.selectbox(
-                "ID Absence Prod à supprimer",
-                [a["id"] for a in absences_prod],
-                key="del_abp",
-            )
-            if st.button("Supprimer Absence Prod"):
-                data["absences_prod"] = [
-                    a for a in absences_prod if a["id"] != id_sup_abp
-                ]
+        if st.form_submit_button("Enregistrer l'absence"):
+            if tech_abs and tech_abs != "Aucun technicien":
+                nouvelle_abs = {
+                    "technicien": tech_abs,
+                    "date_debut": str(d_deb_abs),
+                    "date_fin": str(d_fin_abs),
+                    "motif": motif_abs
+                }
+                # On détermine l'atelier du technicien
+                if any(t["nom"] == tech_abs for t in techniciens_prod):
+                    data.setdefault("absences_prod", []).append(nouvelle_abs)
+                else:
+                    data.setdefault("absences_cons", []).append(nouvelle_abs)
                 sauvegarder_donnees(data)
-                st.success("Absence Prod supprimée.")
+                st.success("Absence enregistrée avec succès !")
                 st.rerun()
+            else:
+                st.error("Veuillez sélectionner un technicien valide.")
 
-    # --- 2. ABSENCES CONSOMMABLES ---
-    with c_ab2:
-        st.subheader("Absences Consommables")
-        if techniciens_cons:
-            with st.form("absc"):
-                t_c = st.selectbox("Tech Cons.", [t["nom"] for t in techniciens_cons])
-                m_c = st.selectbox(
-                    "Motif Cons.",
-                    ["Congés Payés", "RTT", "Maladie", "Formation"],
-                    key="motif_c",
-                )
-                db_c = st.date_input("Début Cons.", auj, key="ab_dbc")
-                df_c = st.date_input("Fin Cons.", auj, key="ab_dfc")
-                
-                if st.form_submit_button("Enregistrer absence Cons."):
-                    absences_cons.append({
-                        "id": f"ABS-C-{len(absences_cons)+1:03d}",
-                        "technicien": t_c,
-                        "motif": m_c,
-                        "date_debut": str(db_c),
-                        "date_fin": str(df_c),
-                    })
-                    data["absences_cons"] = absences_cons
-                    sauvegarder_donnees(data)
-                    st.success("Absence Consommables enregistrée.")
-                    st.rerun()
-        else:
-            st.warning("Ajoute d'abord des techniciens consommables.")
-                
-        if absences_cons:
-            st.dataframe(pd.DataFrame(absences_cons), use_container_width=True)
-            id_sup_abc = st.selectbox(
-                "ID Absence Cons. à supprimer",
-                [a["id"] for a in absences_cons],
-                key="del_abc",
-            )
-            if st.button("Supprimer Absence Cons."):
-                data["absences_cons"] = [
-                    a for a in absences_cons if a["id"] != id_sup_abc
-                ]
-                sauvegarder_donnees(data)
-                st.success("Absence Consommables supprimée.")
-                st.rerun()
+    st.markdown("---")
+    st.subheader("Absences enregistrées (Production & Consommables)")
+    toutes_absences = absences_prod + absences_cons
+    if toutes_absences:
+        st.dataframe(pd.DataFrame(toutes_absences), use_container_width=True, hide_index=True)
+    else:
+        st.info("Aucune absence enregistrée.")
 
 
 # --- ONGLET 7 : SAUVEGARDE & DONNÉES ---
 with onglets[7]:
-    st.header("💾 Sauvegarde, Restauration & Données Brutes")
+    st.header("💾 Gestion de la Sauvegarde & Import/Export")
+    st.markdown("Vous pouvez sauvegarder l'intégralité des données de l'atelier ou réinjecter un fichier de sauvegarde JSON.")
 
-    st.subheader("📥 Export global de la base de données")
     json_str = json.dumps(data, ensure_ascii=False, indent=4)
     st.download_button(
-        label="📥 Télécharger le fichier JSON complet",
+        label="📥 Télécharger la sauvegarde complète (JSON)",
         data=json_str,
-        file_name="donnees_composants_sauvegarde.json",
+        file_name="donnees_composants.json",
         mime="application/json",
     )
 
     st.markdown("---")
-    st.subheader("📤 Importer / Restaurer une sauvegarde JSON")
-    fichier_upload = st.file_uploader(
-        "Sélectionner un fichier JSON de sauvegarde", type=["json"]
-    )
-    if fichier_upload is not None:
+    uploaded_file = st.file_uploader("Restaurer depuis un fichier JSON", type=["json"])
+    if uploaded_file is not None:
         try:
-            donnees_importees = json.load(fichier_upload)
-            if st.button("Confirmer et remplacer les données actuelles"):
-                sauvegarder_donnees(donnees_importees)
-                st.success("Données restaurées avec succès ! Rechargement...")
-                st.rerun()
+            donnees_restaurees = json.load(uploaded_file)
+            sauvegarder_donnees(donnees_restaurees)
+            st.success("Données restaurées avec succès ! Veuillez rafraîchir la page.")
         except Exception as e:
-            st.error(f"Erreur lors de la lecture du fichier JSON : {e}")
-
-    st.markdown("---")
-    st.subheader("🔍 Visualisation brute des données (JSON)")
-    st.json(data)
+            st.error(f"Erreur lors de la lecture du fichier : {e}")
