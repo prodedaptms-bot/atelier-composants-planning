@@ -517,6 +517,7 @@ with onglets[1]:
         annee_courante = auj.year
         semaine_actuelle_num = auj.isocalendar()[1]
         
+        # --- SECTION GLOBALE CONSOMMABLES ---
         qte_semaine_cons = 0
         qte_mois_cons = 0
         qte_ytd_cons = 0
@@ -533,14 +534,48 @@ with onglets[1]:
 
         kpi_c1, kpi_c2, kpi_c3 = st.columns(3)
         with kpi_c1:
-            st.metric("Semaine en cours", f"{qte_semaine_cons} unités")
+            st.metric("Semaine en cours (Global)", f"{qte_semaine_cons} unités")
         with kpi_c2:
-            st.metric("Mois en cours", f"{qte_mois_cons} unités")
+            st.metric("Mois en cours (Global)", f"{qte_mois_cons} unités")
         with kpi_c3:
-            st.metric(f"Année {annee_courante} (YTD)", f"{qte_ytd_cons} unités")
+            st.metric(f"Année {annee_courante} YTD (Global)", f"{qte_ytd_cons} unités")
 
-        st.markdown("##### Historique détaillé des Consommables terminés")
-        st.dataframe(df_tc[["id_plan", "consommable", "quantite", "assigne", "date_fin_cascade", "priorite"]], use_container_width=True, hide_index=True)
+        # --- VENTILATION PAR CONSOMMABLE ---
+        st.markdown("---")
+        st.markdown("##### 🔍 Ventilation détaillée par consommable")
+        
+        # Récupération de la liste unique des consommables présents
+        liste_consommables = df_tc["consommable"].dropna().unique()
+
+        for conso in sorted(liste_consommables):
+            st.markdown(f"**Consommable : `{conso}`**")
+            df_sub = df_tc[df_tc["consommable"] == conso]
+
+            q_sem_sub = 0
+            q_mois_sub = 0
+            q_ytd_sub = 0
+
+            for _, r in df_sub.iterrows():
+                d = r["date_ref"]
+                q = r.get("quantite", 0)
+                if d.year == annee_courante:
+                    q_ytd_sub += q
+                    if d.month == auj.month:
+                        q_mois_sub += q
+                    if d.isocalendar()[1] == semaine_actuelle_num:
+                        q_sem_sub += q
+
+            sub_c1, sub_c2, sub_c3 = st.columns(3)
+            with sub_c1:
+                st.metric("Semaine", f"{q_sem_sub} u")
+            with sub_c2:
+                st.metric("Mois", f"{q_mois_sub} u")
+            with sub_c3:
+                st.metric("YTD", f"{q_ytd_sub} u")
+
+            st.dataframe(df_sub[["id_plan", "quantite", "assigne", "date_fin_cascade", "priorite"]], use_container_width=True, hide_index=True)
+            st.markdown("") # Petit espace entre chaque consommable
+
     else:
         st.info("Aucun OF Consommable au statut 'Terminé' pour le calcul des KPIs.")
 
