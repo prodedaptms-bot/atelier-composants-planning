@@ -567,11 +567,11 @@ with onglets[1]:
 
             sub_c1, sub_c2, sub_c3 = st.columns(3)
             with sub_c1:
-                st.metric("Semaine", f"{q_sem_sub} u")
+                st.metric("Semaine", f"{q_sem_sub} unités")
             with sub_c2:
-                st.metric("Mois", f"{q_mois_sub} u")
+                st.metric("Mois", f"{q_mois_sub} unités")
             with sub_c3:
-                st.metric("YTD", f"{q_ytd_sub} u")
+                st.metric("YTD", f"{q_ytd_sub} unités")
 
             st.dataframe(df_sub[["id_plan", "quantite", "assigne", "date_fin_cascade", "priorite"]], use_container_width=True, hide_index=True)
             st.markdown("") # Petit espace entre chaque consommable
@@ -616,7 +616,6 @@ with onglets[1]:
         st.dataframe(df_ts[["id_plan", "sous_ensemble", "quantite", "assigne", "date_fin_cascade", "priorite"]], use_container_width=True, hide_index=True)
     else:
         st.info("Aucun OF Sous-ensemble au statut 'Terminé' pour le calcul des KPIs.")
-
 
 # --- ONGLET 2 : CRÉATION SOUS-ENSEMBLES ---
 with onglets[2]:
