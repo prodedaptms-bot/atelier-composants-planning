@@ -5,3 +5,4 @@ pandas
 Pillow
 Plotly
 streamlit-gsheets
+openpyxl
